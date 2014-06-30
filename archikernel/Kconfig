@@ -447,4 +447,9 @@ menu "ArchiKernel settings"
 			generation of reg-moves based on the life-range analysis.
 			This option is effective only with -fmodulo-sched enabled.
 
+	config ARCHIKERNEL_CPU_VOLTAGE_INTERFACE
+		bool "Ebable voltage control of the CPU"
+		help
+			This option enables the voltage control interface of the CPU.
+		
 endmenu
