@@ -447,14 +447,20 @@ menu "ArchiKernel settings"
 			generation of reg-moves based on the life-range analysis.
 			This option is effective only with -fmodulo-sched enabled.
 
-    config ARCHIKERNEL_CPU_VOLTAGE_INTERFACE
-        bool "Enable voltage control of the CPU"
-        help
-            This option enables the voltage control interface of the CPU.
+	config ARCHIKERNEL_CPU_VOLTAGE_INTERFACE
+		bool "Enable voltage control of the CPU"
+		help
+			This option enables the voltage control interface of the CPU.
 
-    config ARCHIKERNEL_CPU_OC_1600
-        bool "Enable overclocking of the CPU to 1600Mhz"
-        help
-            This option enables additional CPU clock frequencies up to 1600Mhz.
+	config ARCHIKERNEL_CPU_OC_1600
+		bool "Enable overclocking of the CPU to 1600Mhz"
+		help
+			This option enables additional CPU clock frequencies up to 1600Mhz.
+
+	config ARCHIKERNEL_HAPTIC_CONTROL_AOSP
+		bool "Enable haptic control on AOSP roms like CM/Omni"
+		depends on !ARCHIKERNEL_TARGET_SYSTEM_SAMSUNG
+		help
+			This option enables the haptic feedback control on AOSP roms.
 
 endmenu
