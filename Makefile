@@ -613,6 +613,8 @@ ifdef CONFIG_ARCHIKERNEL_OPTI_OS
 KBUILD_CFLAGS	+= -Os
 endif
 
+KBUILD_CFLAGS   += -Wno-maybe-uninitialized -Wno-array-bounds
+
 ifdef CONFIG_ARCHIKERNEL_OPTI_DNDEBUG
 KBUILD_CFLAGS	+= -DNDEBUG
 endif
