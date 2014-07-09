@@ -743,7 +743,7 @@ static int cpufreq_add_dev_policy(unsigned int cpu,
 #ifdef CONFIG_SMP
 	unsigned long flags;
 	unsigned int j;
-#ifdef CONFIG_HOTPLUG_CPU
+#if defined(CONFIG_HOTPLUG_CPU) && !defined(CONFIG_ARCHIKERNEL_ENABLE_OC)
 	struct cpufreq_governor *gov;
 
 	gov = __find_governor(per_cpu(cpufreq_policy_save, cpu).gov);
@@ -1001,9 +1001,18 @@ static int cpufreq_add_dev(struct device *dev, struct subsys_interface *sif)
 #ifdef CONFIG_HOTPLUG_CPU
 	for_each_online_cpu(sibling) {
 		struct cpufreq_policy *cp = per_cpu(cpufreq_cpu_data, sibling);
-		if (cp && cp->governor &&
-		    (cpumask_test_cpu(cpu, cp->related_cpus))) {
+		#ifdef CONFIG_ARCHIKERNEL_ENABLE_OC
+		if (cp && cp->governor) {
+		#else
+		if (cp && cp->governor && (cpumask_test_cpu(cpu, cp->related_cpus))) {
+		#endif
 			policy->governor = cp->governor;
+			#ifdef CONFIG_ARCHIKERNEL_ENABLE_OC
+			policy->min = cp->min;
+			policy->max = cp->max;
+			policy->user_policy.min = cp->user_policy.min;
+			policy->user_policy.max = cp->user_policy.max;
+			#endif
 			found = 1;
 			break;
 		}
