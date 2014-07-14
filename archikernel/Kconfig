@@ -189,12 +189,6 @@ comment "Hacks / Workarounds"
 
 comment "Core features"
 
-config ARCHIKERNEL_ENABLE_OC
-	bool "Enable Overclocking"
-	help
-		This enables OC up to 1.566 GHz. Stock value is 0.972 GHz.
-		Use with caution!
-
 
 comment "Optimizations"
 
