@@ -1,5 +1,8 @@
 menu "ArchiKernel settings"
 
+
+comment "Target options"
+
 choice
 	prompt "Target system"
 	default AOSP
@@ -137,11 +140,8 @@ config ARCHIKERNEL_TARGET_CPU_FPU_UNKNOWN
 		Unknown FPU, select this if you don't want to apply -mfpu optimization.
 endchoice
 
-config ARCHIKERNEL_ENABLE_OC
-	bool "Enable Overclocking"
-	help
-		This enables OC up to 1.566 GHz. Stock value is 0.972 GHz.
-		Use with caution!
+
+comment "Core options"
 
 choice
 	prompt "Main optimization level"
@@ -182,6 +182,21 @@ config ARCHIKERNEL_OPTI_OS
 		typically increase code size. It also performs further optimizations 
 		designed to reduce code size.
 endchoice
+
+
+comment "Hacks / Workarounds"
+
+
+comment "Core features"
+
+config ARCHIKERNEL_ENABLE_OC
+	bool "Enable Overclocking"
+	help
+		This enables OC up to 1.566 GHz. Stock value is 0.972 GHz.
+		Use with caution!
+
+
+comment "Optimizations"
 
 config ARCHIKERNEL_OPTI_DNDEBUG
 	bool "Disable debugging assertions"
