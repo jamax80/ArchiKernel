@@ -105,7 +105,6 @@ CONFIG_ARCHIKERNEL_OPTI_O3=y
 #
 # Core features
 #
-CONFIG_ARCHIKERNEL_ENABLE_OC=y
 
 #
 # Optimizations
