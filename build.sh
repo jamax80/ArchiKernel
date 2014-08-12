@@ -33,7 +33,7 @@ BARE=0 # --bare -> This will finish the script as soon as the kernel is compiled
 HOME="$(dirname ~)$(basename ~)" # This workaround is required because arm-eabi-nm has problems following ~. Don't change it
 TOOLCHAIN="$HOME/TC/bin" # This is where your toolchain is located. This path must contain arm-eabi-* binaries, typically Toolchaindir/bin
 TARGETDIR="archikernel/flasher" # This is the general output path. You should unpack AK in zip format somewhere, then put proper path here
-TARGETZIPDIR="$HOME/shared/kernel/m0" # If not empty, output zip will be moved here
+TARGETZIPDIR="$HOME/shared/kernel/nicki" # If not empty, output zip will be moved here
 TARGETCONFIG="aosp_ak_defconfig" # This is default config, which is overrided if extra argument is given
 BEEP=1 # This will beep three times on finish to wake me up :). Works even through SSH!
 
