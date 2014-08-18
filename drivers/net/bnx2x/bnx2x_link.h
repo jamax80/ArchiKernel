@@ -33,12 +33,13 @@
 #define BNX2X_FLOW_CTRL_BOTH		PORT_FEATURE_FLOW_CONTROL_BOTH
 #define BNX2X_FLOW_CTRL_NONE		PORT_FEATURE_FLOW_CONTROL_NONE
 
+#define NET_SERDES_IF_XFI		1
+#define NET_SERDES_IF_SFI		2
+#define NET_SERDES_IF_KR		3
+#define NET_SERDES_IF_DXGXS	4
+
 #define SPEED_AUTO_NEG		0
-#define SPEED_12000		12000
-#define SPEED_12500		12500
-#define SPEED_13000		13000
-#define SPEED_15000		15000
-#define SPEED_16000		16000
+#define SPEED_20000		20000
 
 #define SFP_EEPROM_VENDOR_NAME_ADDR		0x14
 #define SFP_EEPROM_VENDOR_NAME_SIZE		16
@@ -46,6 +47,12 @@
 #define SFP_EEPROM_VENDOR_OUI_SIZE		3
 #define SFP_EEPROM_PART_NO_ADDR			0x28
 #define SFP_EEPROM_PART_NO_SIZE			16
+#define SFP_EEPROM_REVISION_ADDR		0x38
+#define SFP_EEPROM_REVISION_SIZE		4
+#define SFP_EEPROM_SERIAL_ADDR			0x44
+#define SFP_EEPROM_SERIAL_SIZE			16
+#define SFP_EEPROM_DATE_ADDR			0x54 /* ASCII YYMMDD */
+#define SFP_EEPROM_DATE_SIZE			6
 #define PWR_FLT_ERR_MSG_LEN			250
 
 #define XGXS_EXT_PHY_TYPE(ext_phy_config) \
@@ -62,25 +69,26 @@
 #define SINGLE_MEDIA(params)		(params->num_phys == 2)
 /* Dual Media board contains two external phy with different media */
 #define DUAL_MEDIA(params)		(params->num_phys == 3)
+
+#define FW_PARAM_PHY_ADDR_MASK		0x000000FF
+#define FW_PARAM_PHY_TYPE_MASK		0x0000FF00
+#define FW_PARAM_MDIO_CTRL_MASK		0xFFFF0000
 #define FW_PARAM_MDIO_CTRL_OFFSET		16
+#define FW_PARAM_PHY_ADDR(fw_param) (fw_param & \
+					   FW_PARAM_PHY_ADDR_MASK)
+#define FW_PARAM_PHY_TYPE(fw_param) (fw_param & \
+					   FW_PARAM_PHY_TYPE_MASK)
+#define FW_PARAM_MDIO_CTRL(fw_param) ((fw_param & \
+					    FW_PARAM_MDIO_CTRL_MASK) >> \
+					    FW_PARAM_MDIO_CTRL_OFFSET)
 #define FW_PARAM_SET(phy_addr, phy_type, mdio_access) \
 	(phy_addr | phy_type | mdio_access << FW_PARAM_MDIO_CTRL_OFFSET)
 
-#define PFC_BRB_MAC_PAUSE_XOFF_THRESHOLD_PAUSEABLE		170
-#define PFC_BRB_MAC_PAUSE_XOFF_THRESHOLD_NON_PAUSEABLE		0
-
-#define PFC_BRB_MAC_PAUSE_XON_THRESHOLD_PAUSEABLE			250
-#define PFC_BRB_MAC_PAUSE_XON_THRESHOLD_NON_PAUSEABLE		0
-
-#define PFC_BRB_MAC_FULL_XOFF_THRESHOLD_PAUSEABLE			10
-#define PFC_BRB_MAC_FULL_XOFF_THRESHOLD_NON_PAUSEABLE		90
-
-#define PFC_BRB_MAC_FULL_XON_THRESHOLD_PAUSEABLE			50
-#define PFC_BRB_MAC_FULL_XON_THRESHOLD_NON_PAUSEABLE		250
 
 #define PFC_BRB_FULL_LB_XOFF_THRESHOLD				170
 #define PFC_BRB_FULL_LB_XON_THRESHOLD				250
 
+#define MAXVAL(a, b) (((a) > (b)) ? (a) : (b))
 /***********************************************************/
 /*                         Structs                         */
 /***********************************************************/
@@ -131,8 +139,12 @@ struct bnx2x_phy {
 #define FLAGS_FAN_FAILURE_DET_REQ	(1<<2)
 	/* Initialize first the XGXS and only then the phy itself */
 #define FLAGS_INIT_XGXS_FIRST		(1<<3)
+#define FLAGS_WC_DUAL_MODE		(1<<4)
+#define FLAGS_4_PORT_MODE		(1<<5)
 #define FLAGS_REARM_LATCH_SIGNAL	(1<<6)
 #define FLAGS_SFP_NOT_APPROVED		(1<<7)
+#define FLAGS_MDC_MDIO_WA		(1<<8)
+#define FLAGS_DUMMY_READ		(1<<9)
 
 	/* preemphasis values for the rx side */
 	u16 rx_preemphasis[4];
@@ -151,8 +163,8 @@ struct bnx2x_phy {
 #define	ETH_PHY_XFP_FIBER   0x2
 #define	ETH_PHY_DA_TWINAX   0x3
 #define	ETH_PHY_BASE_T      0x4
-#define	ETH_PHY_KR	    0xf0
-#define	ETH_PHY_CX4	    0xf1
+#define	ETH_PHY_KR          0xf0
+#define	ETH_PHY_CX4         0xf1
 #define	ETH_PHY_NOT_PRESENT 0xff
 
 	/* The address in which version is located*/
@@ -257,11 +269,19 @@ struct link_params {
 /* Output parameters */
 struct link_vars {
 	u8 phy_flags;
+#define PHY_XGXS_FLAG			(1<<0)
+#define PHY_SGMII_FLAG			(1<<1)
+#define PHY_PHYSICAL_LINK_FLAG		(1<<2)
+#define PHY_HALF_OPEN_CONN_FLAG		(1<<3)
+#define PHY_OVER_CURRENT_FLAG		(1<<4)
+#define PHY_TX_ERROR_CHECK_FLAG		(1<<5)
 
 	u8 mac_type;
 #define MAC_TYPE_NONE		0
 #define MAC_TYPE_EMAC		1
 #define MAC_TYPE_BMAC		2
+#define MAC_TYPE_UMAC		3
+#define MAC_TYPE_XMAC		4
 
 	u8 phy_link_up; /* internal phy link indication */
 	u8 link_up;
@@ -276,7 +296,9 @@ struct link_vars {
 	u32 link_status;
 	u8 fault_detected;
 	u8 rsrv1;
-	u16 rsrv2;
+	u16 periodic_flags;
+#define PERIODIC_FLAGS_LINK_EVENT	0x0001
+
 	u32 aeu_int_mask;
 };
 
@@ -363,6 +385,22 @@ int bnx2x_phy_probe(struct link_params *params);
 u8 bnx2x_fan_failure_det_req(struct bnx2x *bp, u32 shmem_base,
 			     u32 shmem2_base, u8 port);
 
+
+
+/* DCBX structs */
+
+/* Number of maximum COS per chip */
+#define DCBX_E2E3_MAX_NUM_COS		(2)
+#define DCBX_E3B0_MAX_NUM_COS_PORT0	(6)
+#define DCBX_E3B0_MAX_NUM_COS_PORT1	(3)
+#define DCBX_E3B0_MAX_NUM_COS		( \
+			MAXVAL(DCBX_E3B0_MAX_NUM_COS_PORT0, \
+			    DCBX_E3B0_MAX_NUM_COS_PORT1))
+
+#define DCBX_MAX_NUM_COS			( \
+			MAXVAL(DCBX_E3B0_MAX_NUM_COS, \
+			    DCBX_E2E3_MAX_NUM_COS))
+
 /* PFC port configuration params */
 struct bnx2x_nig_brb_pfc_port_params {
 	/* NIG */
@@ -370,8 +408,8 @@ struct bnx2x_nig_brb_pfc_port_params {
 	u32 llfc_out_en;
 	u32 llfc_enable;
 	u32 pkt_priority_to_cos;
-	u32 rx_cos0_priority_mask;
-	u32 rx_cos1_priority_mask;
+	u8 num_of_rx_cos_priority_mask;
+	u32 rx_cos_priority_mask[DCBX_MAX_NUM_COS];
 	u32 llfc_high_priority_classes;
 	u32 llfc_low_priority_classes;
 	/* BRB */
@@ -379,17 +417,50 @@ struct bnx2x_nig_brb_pfc_port_params {
 	u32 cos1_pauseable;
 };
 
+
+/* ETS port configuration params */
+struct bnx2x_ets_bw_params {
+	u8 bw;
+};
+
+struct bnx2x_ets_sp_params {
+	/**
+	 * valid values are 0 - 5. 0 is highest strict priority.
+	 * There can't be two COS's with the same pri.
+	 */
+	u8 pri;
+};
+
+enum bnx2x_cos_state {
+	bnx2x_cos_state_strict = 0,
+	bnx2x_cos_state_bw = 1,
+};
+
+struct bnx2x_ets_cos_params {
+	enum bnx2x_cos_state state ;
+	union {
+		struct bnx2x_ets_bw_params bw_params;
+		struct bnx2x_ets_sp_params sp_params;
+	} params;
+};
+
+struct bnx2x_ets_params {
+	u8 num_of_cos; /* Number of valid COS entries*/
+	struct bnx2x_ets_cos_params cos[DCBX_MAX_NUM_COS];
+};
+
 /**
  * Used to update the PFC attributes in EMAC, BMAC, NIG and BRB
  * when link is already up
  */
-void bnx2x_update_pfc(struct link_params *params,
+int bnx2x_update_pfc(struct link_params *params,
 		      struct link_vars *vars,
 		      struct bnx2x_nig_brb_pfc_port_params *pfc_params);
 
 
 /* Used to configure the ETS to disable */
-void bnx2x_ets_disabled(struct link_params *params);
+int bnx2x_ets_disabled(struct link_params *params,
+		       struct link_vars *vars);
 
 /* Used to configure the ETS to BW limited */
 void bnx2x_ets_bw_limit(const struct link_params *params, const u32 cos0_bw,
@@ -398,6 +469,11 @@ void bnx2x_ets_bw_limit(const struct link_params *params, const u32 cos0_bw,
 /* Used to configure the ETS to strict */
 int bnx2x_ets_strict(const struct link_params *params, const u8 strict_cos);
 
+
+/*  Configure the COS to ETS according to BW and SP settings.*/
+int bnx2x_ets_e3b0_config(const struct link_params *params,
+			 const struct link_vars *vars,
+			 const struct bnx2x_ets_params *ets_params);
 /* Read pfc statistic*/
 void bnx2x_pfc_statistic(struct link_params *params, struct link_vars *vars,
 						 u32 pfc_frames_sent[2],
@@ -405,4 +481,10 @@ void bnx2x_pfc_statistic(struct link_params *params, struct link_vars *vars,
 void bnx2x_init_mod_abs_int(struct bnx2x *bp, struct link_vars *vars,
 			    u32 chip_id, u32 shmem_base, u32 shmem2_base,
 			    u8 port);
+
+int bnx2x_sfp_module_detection(struct bnx2x_phy *phy,
+			       struct link_params *params);
+
+void bnx2x_period_func(struct link_params *params, struct link_vars *vars);
+
 #endif /* BNX2X_LINK_H */

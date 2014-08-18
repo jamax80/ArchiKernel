@@ -153,12 +153,12 @@ static inline unsigned int enic_legacy_notify_intr(void)
 
 static inline unsigned int enic_msix_rq_intr(struct enic *enic, unsigned int rq)
 {
-	return rq;
+	return enic->cq[enic_cq_rq(enic, rq)].interrupt_offset;
 }
 
 static inline unsigned int enic_msix_wq_intr(struct enic *enic, unsigned int wq)
 {
-	return enic->rq_count + wq;
+	return enic->cq[enic_cq_wq(enic, wq)].interrupt_offset;
 }
 
 static inline unsigned int enic_msix_err_intr(struct enic *enic)
@@ -1266,8 +1266,7 @@ static void enic_rq_indicate_buf(struct vnic_rq *rq,
 
 		skb->dev = netdev;
 
-		if (enic->vlan_group && vlan_stripped &&
-			(vlan_tci & CQ_ENET_RQ_DESC_VLAN_TCI_VLAN_MASK)) {
+		if (vlan_stripped) {
 
 			if (netdev->features & NETIF_F_GRO)
 				vlan_gro_receive(&enic->napi[q_number],
