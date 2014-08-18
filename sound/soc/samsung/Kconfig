@@ -386,3 +386,9 @@ config SND_USE_EXTERNAL_LDO_FOR_EARMICBIAS
 	depends on SND_SOC_SAMSUNG	
 	help
 	  Say Y if External LDO is used for EAR MICBIAS.
+
+config SND_SOC_SPEYSIDE_WM8962
+	tristate "Audio support for Wolfson Speyside with WM8962"
+	depends on SND_SOC_SAMSUNG && MACH_WLF_CRAGG_6410
+	select SND_SAMSUNG_I2S
+	select SND_SOC_WM8962
