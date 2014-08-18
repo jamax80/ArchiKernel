@@ -451,6 +451,7 @@ enum {
 	CONN_REJ_ACT,
 	CONN_SEND_FBIT,
 	CONN_RNR_SENT,
+	CONN_SAR_RETRY,
 };
 
 #define __set_chan_timer(c, t) l2cap_set_timer(c, &c->chan_timer, (t))
