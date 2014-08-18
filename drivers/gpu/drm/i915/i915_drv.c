@@ -108,6 +108,9 @@ module_param_named(i915_enable_ppgtt, i915_enable_ppgtt, bool, 0600);
 MODULE_PARM_DESC(i915_enable_ppgtt,
 		"Enable PPGTT (default: true)");
 
+bool i915_enable_hangcheck = true;
+module_param_named(enable_hangcheck, i915_enable_hangcheck, bool, 0644);
+
 static struct drm_driver driver;
 extern int intel_agp_enabled;
 
