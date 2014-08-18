@@ -591,7 +591,7 @@ int soc_new_pcm(struct snd_soc_pcm_runtime *rtd, int num)
 
 #ifdef CONFIG_ARCHIKERNEL_UPSTREAM_HACKS
 	soc_pcm_ops->open = soc_pcm_open;
-	soc_pcm_ops->close = soc_codec_close;
+	soc_pcm_ops->close = soc_pcm_close;
 	soc_pcm_ops->hw_params = soc_pcm_hw_params;
 	soc_pcm_ops->hw_free = soc_pcm_hw_free;
 	soc_pcm_ops->prepare = soc_pcm_prepare;
