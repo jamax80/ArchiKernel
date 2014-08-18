@@ -31,6 +31,7 @@ choice
 
 config ARCHIKERNEL_TARGET_SYSTEM_AOSP
 	bool "AOSP"
+	select ARCHIKERNEL_UPSTREAM_HACKS
 	select ARCHIKERNEL_TARGET_SYSTEM_HAS_BROKEN_S5C73M3_FIRMWARE
 	select ARCHIKERNEL_TARGET_SYSTEM_HAS_BROKEN_ZRAM
 	select ARCHIKERNEL_TARGET_SYSTEM_HAS_NO_SLICE_ENCODING
@@ -40,6 +41,7 @@ config ARCHIKERNEL_TARGET_SYSTEM_AOSP
 
 config ARCHIKERNEL_TARGET_SYSTEM_SAMSUNG
 	bool "Samsung"
+	select ARCHIKERNEL_UPSTREAM_HACKS
 	select USB_ANDROID_SAMSUNG_COMPOSITE
 	select USB_ANDROID_SAMSUNG_MTP
 	help
@@ -254,6 +256,12 @@ endchoice
 
 
 comment "Hacks / Workarounds"
+
+config ARCHIKERNEL_UPSTREAM_HACKS
+	bool "Enable various work-in-progress hacks for upstreamed kernel"
+	help
+		This option enables various hacks and workarounds, which
+		are required to make certain things work with upstreamed kernel.
 
 config ARCHIKERNEL_TARGET_SYSTEM_HAS_NO_SLICE_ENCODING
 	bool "System does not support slice encoding"
