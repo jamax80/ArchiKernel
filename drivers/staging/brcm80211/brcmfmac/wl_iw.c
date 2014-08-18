@@ -16,29 +16,25 @@
 
 #include <linux/kthread.h>
 #include <linux/semaphore.h>
-#include <defs.h>
+#include <bcmdefs.h>
 #include <linux/netdevice.h>
-#include <linux/etherdevice.h>
-#include <linux/wireless.h>
+#include <linux/hardirq.h>
+#include <wlioctl.h>
 
-#include <brcmu_utils.h>
-#include <brcmu_wifi.h>
+#include <bcmutils.h>
 
 #include <linux/if_arp.h>
 #include <asm/uaccess.h>
 
 #include <dngl_stats.h>
 #include <dhd.h>
+#include <dhdioctl.h>
 #include <linux/ieee80211.h>
-
-struct si_pub;
+typedef const struct si_pub si_t;
+#include <wlioctl.h>
 
 #include <dngl_stats.h>
 #include <dhd.h>
-
-#define WPA_OUI			"\x00\x50\xF2"
-#define DOT11_MNG_RSN_ID			48
-#define DOT11_MNG_WPA_ID			221
 
 #define WL_ERROR(fmt, args...)	printk(fmt, ##args)
 #define WL_TRACE(fmt, args...)	no_printk(fmt, ##args)
@@ -68,6 +64,8 @@ wl_iw_extra_params_t g_wl_iw_params;
 
 extern bool wl_iw_conn_status_str(u32 event_type, u32 status,
 				  u32 reason, char *stringBuf, uint buflen);
+
+uint wl_msg_level = WL_ERROR_VAL;
 
 #define MAX_WLIW_IOCTL_LEN 1024
 
@@ -117,24 +115,6 @@ typedef struct iscan_info {
 	int iscan_ex_param_size;
 } iscan_info_t;
 iscan_info_t *g_iscan;
-
-typedef enum sup_auth_status {
-	WLC_SUP_DISCONNECTED = 0,
-	WLC_SUP_CONNECTING,
-	WLC_SUP_IDREQUIRED,
-	WLC_SUP_AUTHENTICATING,
-	WLC_SUP_AUTHENTICATED,
-	WLC_SUP_KEYXCHANGE,
-	WLC_SUP_KEYED,
-	WLC_SUP_TIMEOUT,
-	WLC_SUP_LAST_BASIC_STATE,
-	WLC_SUP_KEYXCHANGE_WAIT_M1 = WLC_SUP_AUTHENTICATED,
-	WLC_SUP_KEYXCHANGE_PREP_M2 = WLC_SUP_KEYXCHANGE,
-	WLC_SUP_KEYXCHANGE_WAIT_M3 = WLC_SUP_LAST_BASIC_STATE,
-	WLC_SUP_KEYXCHANGE_PREP_M4,
-	WLC_SUP_KEYXCHANGE_WAIT_G1,
-	WLC_SUP_KEYXCHANGE_PREP_G2
-} sup_auth_status_t;
 
 static const u8 ether_bcast[ETH_ALEN] = {255, 255, 255, 255, 255, 255};
 
@@ -228,8 +208,7 @@ static int dev_wlc_intvar_set(struct net_device *dev, char *name, int val)
 	uint len;
 
 	val = cpu_to_le32(val);
-	len = brcmu_mkiovar(name, (char *)(&val), sizeof(val), buf,
-			    sizeof(buf));
+	len = bcm_mkiovar(name, (char *)(&val), sizeof(val), buf, sizeof(buf));
 	ASSERT(len);
 
 	return dev_wlc_ioctl(dev, WLC_SET_VAR, buf, len);
@@ -243,7 +222,7 @@ dev_iw_iovar_setbuf(struct net_device *dev,
 {
 	int iolen;
 
-	iolen = brcmu_mkiovar(iovar, param, paramlen, bufptr, buflen);
+	iolen = bcm_mkiovar(iovar, param, paramlen, bufptr, buflen);
 	ASSERT(iolen);
 
 	if (iolen == 0)
@@ -259,7 +238,7 @@ dev_iw_iovar_getbuf(struct net_device *dev,
 {
 	int iolen;
 
-	iolen = brcmu_mkiovar(iovar, param, paramlen, bufptr, buflen);
+	iolen = bcm_mkiovar(iovar, param, paramlen, bufptr, buflen);
 	ASSERT(iolen);
 
 	return dev_wlc_ioctl(dev, WLC_GET_VAR, bufptr, buflen);
@@ -273,7 +252,7 @@ dev_wlc_bufvar_set(struct net_device *dev, char *name, char *buf, int len)
 	static char ioctlbuf[MAX_WLIW_IOCTL_LEN];
 	uint buflen;
 
-	buflen = brcmu_mkiovar(name, buf, len, ioctlbuf, sizeof(ioctlbuf));
+	buflen = bcm_mkiovar(name, buf, len, ioctlbuf, sizeof(ioctlbuf));
 	ASSERT(buflen);
 
 	return dev_wlc_ioctl(dev, WLC_SET_VAR, ioctlbuf, buflen);
@@ -287,7 +266,7 @@ dev_wlc_bufvar_get(struct net_device *dev, char *name, char *buf, int buflen)
 	int error;
 	uint len;
 
-	len = brcmu_mkiovar(name, NULL, 0, ioctlbuf, sizeof(ioctlbuf));
+	len = bcm_mkiovar(name, NULL, 0, ioctlbuf, sizeof(ioctlbuf));
 	ASSERT(len);
 	error =
 	    dev_wlc_ioctl(dev, WLC_GET_VAR, (void *)ioctlbuf,
@@ -310,7 +289,7 @@ static int dev_wlc_intvar_get(struct net_device *dev, char *name, int *retval)
 	uint data_null;
 
 	len =
-	    brcmu_mkiovar(name, (char *)(&data_null), 0, (char *)(&var),
+	    bcm_mkiovar(name, (char *)(&data_null), 0, (char *)(&var),
 			sizeof(var.buf));
 	ASSERT(len);
 	error = dev_wlc_ioctl(dev, WLC_GET_VAR, (void *)&var, len);
@@ -395,7 +374,7 @@ wl_iw_set_freq(struct net_device *dev,
 		if (fwrq->m > 4000 && fwrq->m < 5000)
 			sf = WF_CHAN_FACTOR_4_G;
 
-		chan = brcmu_mhz2channel(fwrq->m, sf);
+		chan = bcm_mhz2channel(fwrq->m, sf);
 	}
 	chan = cpu_to_le32(chan);
 
@@ -1446,11 +1425,11 @@ wl_iw_handle_scanresults_ies(char **event_p, char *end,
 
 	event = *event_p;
 	if (bi->ie_length) {
-		struct brcmu_tlv *ie;
+		bcm_tlv_t *ie;
 		u8 *ptr = ((u8 *) bi) + sizeof(wl_bss_info_t);
 		int ptr_len = bi->ie_length;
 
-		ie = brcmu_parse_tlvs(ptr, ptr_len, DOT11_MNG_RSN_ID);
+		ie = bcm_parse_tlvs(ptr, ptr_len, DOT11_MNG_RSN_ID);
 		if (ie) {
 			iwe.cmd = IWEVGENIE;
 			iwe.u.data.length = ie->len + 2;
@@ -1460,8 +1439,7 @@ wl_iw_handle_scanresults_ies(char **event_p, char *end,
 		}
 		ptr = ((u8 *) bi) + sizeof(wl_bss_info_t);
 
-		while ((ie = brcmu_parse_tlvs(
-				ptr, ptr_len, DOT11_MNG_WPA_ID))) {
+		while ((ie = bcm_parse_tlvs(ptr, ptr_len, DOT11_MNG_WPA_ID))) {
 			if (ie_is_wps_ie(((u8 **)&ie), &ptr, &ptr_len)) {
 				iwe.cmd = IWEVGENIE;
 				iwe.u.data.length = ie->len + 2;
@@ -1474,8 +1452,7 @@ wl_iw_handle_scanresults_ies(char **event_p, char *end,
 
 		ptr = ((u8 *) bi) + sizeof(wl_bss_info_t);
 		ptr_len = bi->ie_length;
-		while ((ie = brcmu_parse_tlvs(
-				ptr, ptr_len, DOT11_MNG_WPA_ID))) {
+		while ((ie = bcm_parse_tlvs(ptr, ptr_len, DOT11_MNG_WPA_ID))) {
 			if (ie_is_wpa_ie(((u8 **)&ie), &ptr, &ptr_len)) {
 				iwe.cmd = IWEVGENIE;
 				iwe.u.data.length = ie->len + 2;
@@ -2200,8 +2177,8 @@ wl_iw_set_txpow(struct net_device *dev,
 	else
 		txpwrmw = (u16) vwrq->value;
 
-	error = dev_wlc_intvar_set(dev, "qtxpower",
-				   (int)(brcmu_mw_to_qdbm(txpwrmw)));
+	error =
+	    dev_wlc_intvar_set(dev, "qtxpower", (int)(bcm_mw_to_qdbm(txpwrmw)));
 	return error;
 }
 
@@ -2225,7 +2202,7 @@ wl_iw_get_txpow(struct net_device *dev,
 
 	disable = le32_to_cpu(disable);
 	result = (u8) (txpwrdbm & ~WL_TXPWR_OVERRIDE);
-	vwrq->value = (s32) brcmu_qdbm_to_mw(result);
+	vwrq->value = (s32) bcm_qdbm_to_mw(result);
 	vwrq->fixed = 0;
 	vwrq->disabled =
 	    (disable & (WL_RADIO_SW_DISABLE | WL_RADIO_HW_DISABLE)) ? 1 : 0;
