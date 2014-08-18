@@ -908,6 +908,8 @@ int snd_hda_get_connections(struct hda_codec *codec, hda_nid_t nid,
 			    hda_nid_t *conn_list, int max_conns);
 int snd_hda_get_conn_list(struct hda_codec *codec, hda_nid_t nid,
 			  const hda_nid_t **listp);
+int snd_hda_get_conn_index(struct hda_codec *codec, hda_nid_t mux,
+			   hda_nid_t nid, int recursive);
 int snd_hda_query_supported_pcm(struct hda_codec *codec, hda_nid_t nid,
 				u32 *ratesp, u64 *formatsp, unsigned int *bpsp);
 
@@ -1014,17 +1016,15 @@ int snd_hda_suspend(struct hda_bus *bus);
 int snd_hda_resume(struct hda_bus *bus);
 #endif
 
-#ifdef CONFIG_SND_HDA_POWER_SAVE
 static inline
 int hda_call_check_power_status(struct hda_codec *codec, hda_nid_t nid)
 {
+#ifdef CONFIG_SND_HDA_POWER_SAVE
 	if (codec->patch_ops.check_power_status)
 		return codec->patch_ops.check_power_status(codec, nid);
+#endif
 	return 0;
 }
-#else	
-#define hda_call_check_power_status(codec, nid)		0
-#endif
 
 /*
  * get widget information
