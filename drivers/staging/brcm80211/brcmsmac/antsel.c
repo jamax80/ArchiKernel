@@ -14,24 +14,13 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/pci.h>
+#include <linux/slab.h>
+#include <net/mac80211.h>
 
-#include <defs.h>
-#include <brcmu_utils.h>
-#include <aiutils.h>
-#include <brcm_hw_ids.h>
-#include "dma.h"
-
-#include "d11.h"
-#include "rate.h"
-#include "scb.h"
-#include "pub.h"
-#include "phy/phy_hal.h"
+#include "types.h"
 #include "bmac.h"
-#include "channel.h"
 #include "main.h"
+#include "phy_shim.h"
 #include "antsel.h"
 
 #define ANT_SELCFG_AUTO		0x80	/* bit indicates antenna sel AUTO */
@@ -61,10 +50,11 @@
 #define ANT_SELCFG_DEF_2x4	0x02	/* default antenna configuration */
 
 /* static functions */
-static int wlc_antsel_cfgupd(struct antsel_info *asi, wlc_antselcfg_t *antsel);
-static u8 wlc_antsel_id2antcfg(struct antsel_info *asi, u8 id);
-static u16 wlc_antsel_antcfg2antsel(struct antsel_info *asi, u8 ant_cfg);
-static void wlc_antsel_init_cfg(struct antsel_info *asi,
+static int brcms_c_antsel_cfgupd(struct antsel_info *asi,
+				 wlc_antselcfg_t *antsel);
+static u8 brcms_c_antsel_id2antcfg(struct antsel_info *asi, u8 id);
+static u16 brcms_c_antsel_antcfg2antsel(struct antsel_info *asi, u8 ant_cfg);
+static void brcms_c_antsel_init_cfg(struct antsel_info *asi,
 				wlc_antselcfg_t *antsel,
 				bool auto_sel);
 
@@ -92,14 +82,14 @@ const u8 mimo_2x3_div_antselid_tbl[16] = {
 	0, 0, 0, 0, 0, 0, 0, 0	/* pat to antselid */
 };
 
-struct antsel_info *wlc_antsel_attach(struct wlc_info *wlc)
+struct antsel_info *brcms_c_antsel_attach(struct brcms_c_info *wlc)
 {
 	struct antsel_info *asi;
 
 	asi = kzalloc(sizeof(struct antsel_info), GFP_ATOMIC);
 	if (!asi) {
-		wiphy_err(wlc->wiphy, "wl%d: wlc_antsel_attach: out of mem\n",
-			  wlc->pub->unit);
+		wiphy_err(wlc->wiphy, "wl%d: brcms_c_antsel_attach: out of "
+			  "mem\n", wlc->pub->unit);
 		return NULL;
 	}
 
@@ -128,7 +118,7 @@ struct antsel_info *wlc_antsel_attach(struct wlc_info *wlc)
 				asi->antsel_avail = false;
 			} else {
 				asi->antsel_avail = false;
-				wiphy_err(wlc->wiphy, "wlc_antsel_attach: 2o3 "
+				wiphy_err(wlc->wiphy, "antsel_attach: 2o3 "
 					  "board cfg invalid\n");
 			}
 			break;
@@ -147,30 +137,30 @@ struct antsel_info *wlc_antsel_attach(struct wlc_info *wlc)
 	}
 
 	/* Set the antenna selection type for the low driver */
-	wlc_bmac_antsel_type_set(wlc->hw, asi->antsel_type);
+	brcms_b_antsel_type_set(wlc->hw, asi->antsel_type);
 
 	/* Init (auto/manual) antenna selection */
-	wlc_antsel_init_cfg(asi, &asi->antcfg_11n, true);
-	wlc_antsel_init_cfg(asi, &asi->antcfg_cur, true);
+	brcms_c_antsel_init_cfg(asi, &asi->antcfg_11n, true);
+	brcms_c_antsel_init_cfg(asi, &asi->antcfg_cur, true);
 
 	return asi;
 }
 
-void wlc_antsel_detach(struct antsel_info *asi)
+void brcms_c_antsel_detach(struct antsel_info *asi)
 {
 	kfree(asi);
 }
 
-void wlc_antsel_init(struct antsel_info *asi)
+void brcms_c_antsel_init(struct antsel_info *asi)
 {
 	if ((asi->antsel_type == ANTSEL_2x3) ||
 	    (asi->antsel_type == ANTSEL_2x4))
-		wlc_antsel_cfgupd(asi, &asi->antcfg_11n);
+		brcms_c_antsel_cfgupd(asi, &asi->antcfg_11n);
 }
 
 /* boardlevel antenna selection: init antenna selection structure */
 static void
-wlc_antsel_init_cfg(struct antsel_info *asi, wlc_antselcfg_t *antsel,
+brcms_c_antsel_init_cfg(struct antsel_info *asi, wlc_antselcfg_t *antsel,
 		    bool auto_sel)
 {
 	if (asi->antsel_type == ANTSEL_2x3) {
@@ -201,7 +191,7 @@ wlc_antsel_init_cfg(struct antsel_info *asi, wlc_antselcfg_t *antsel,
 }
 
 void
-wlc_antsel_antcfg_get(struct antsel_info *asi, bool usedef, bool sel,
+brcms_c_antsel_antcfg_get(struct antsel_info *asi, bool usedef, bool sel,
 		      u8 antselid, u8 fbantselid, u8 *antcfg,
 		      u8 *fbantcfg)
 {
@@ -221,8 +211,8 @@ wlc_antsel_antcfg_get(struct antsel_info *asi, bool usedef, bool sel,
 	} else {
 		ant = asi->antcfg_11n.ant_config[ANT_SELCFG_TX_UNICAST];
 		if ((ant & ANT_SELCFG_AUTO) == ANT_SELCFG_AUTO) {
-			*antcfg = wlc_antsel_id2antcfg(asi, antselid);
-			*fbantcfg = wlc_antsel_id2antcfg(asi, fbantselid);
+			*antcfg = brcms_c_antsel_id2antcfg(asi, antselid);
+			*fbantcfg = brcms_c_antsel_id2antcfg(asi, fbantselid);
 		} else {
 			*antcfg =
 			    asi->antcfg_11n.ant_config[ANT_SELCFG_TX_UNICAST];
@@ -233,7 +223,7 @@ wlc_antsel_antcfg_get(struct antsel_info *asi, bool usedef, bool sel,
 }
 
 /* boardlevel antenna selection: convert mimo_antsel (ucode interface) to id */
-u8 wlc_antsel_antsel2id(struct antsel_info *asi, u16 antsel)
+u8 brcms_c_antsel_antsel2id(struct antsel_info *asi, u16 antsel)
 {
 	u8 antselid = 0;
 
@@ -252,7 +242,7 @@ u8 wlc_antsel_antsel2id(struct antsel_info *asi, u16 antsel)
 }
 
 /* boardlevel antenna selection: convert id to ant_cfg */
-static u8 wlc_antsel_id2antcfg(struct antsel_info *asi, u8 id)
+static u8 brcms_c_antsel_id2antcfg(struct antsel_info *asi, u8 id)
 {
 	u8 antcfg = ANT_SELCFG_DEF_2x2;
 
@@ -271,7 +261,7 @@ static u8 wlc_antsel_id2antcfg(struct antsel_info *asi, u8 id)
 }
 
 /* boardlevel antenna selection: convert ant_cfg to mimo_antsel (ucode interface) */
-static u16 wlc_antsel_antcfg2antsel(struct antsel_info *asi, u8 ant_cfg)
+static u16 brcms_c_antsel_antcfg2antsel(struct antsel_info *asi, u8 ant_cfg)
 {
 	u8 idx = WLC_ANTIDX_11N(WLC_ANTSEL_11N(ant_cfg));
 	u16 mimo_antsel = 0;
@@ -291,9 +281,10 @@ static u16 wlc_antsel_antcfg2antsel(struct antsel_info *asi, u8 ant_cfg)
 }
 
 /* boardlevel antenna selection: ucode interface control */
-static int wlc_antsel_cfgupd(struct antsel_info *asi, wlc_antselcfg_t *antsel)
+static int brcms_c_antsel_cfgupd(struct antsel_info *asi,
+				 wlc_antselcfg_t *antsel)
 {
-	struct wlc_info *wlc = asi->wlc;
+	struct brcms_c_info *wlc = asi->wlc;
 	u8 ant_cfg;
 	u16 mimo_antsel;
 
@@ -301,8 +292,8 @@ static int wlc_antsel_cfgupd(struct antsel_info *asi, wlc_antselcfg_t *antsel)
 	 *    (aka default TX)
 	 */
 	ant_cfg = antsel->ant_config[ANT_SELCFG_TX_DEF];
-	mimo_antsel = wlc_antsel_antcfg2antsel(asi, ant_cfg);
-	wlc_write_shm(wlc, M_MIMO_ANTSEL_TXDFLT, mimo_antsel);
+	mimo_antsel = brcms_c_antsel_antcfg2antsel(asi, ant_cfg);
+	brcms_c_write_shm(wlc, M_MIMO_ANTSEL_TXDFLT, mimo_antsel);
 	/* Update driver stats for currently selected default tx/rx antenna config */
 	asi->antcfg_cur.ant_config[ANT_SELCFG_TX_DEF] = ant_cfg;
 
@@ -310,8 +301,8 @@ static int wlc_antsel_cfgupd(struct antsel_info *asi, wlc_antselcfg_t *antsel)
 	 *    (aka default RX)
 	 */
 	ant_cfg = antsel->ant_config[ANT_SELCFG_RX_DEF];
-	mimo_antsel = wlc_antsel_antcfg2antsel(asi, ant_cfg);
-	wlc_write_shm(wlc, M_MIMO_ANTSEL_RXDFLT, mimo_antsel);
+	mimo_antsel = brcms_c_antsel_antcfg2antsel(asi, ant_cfg);
+	brcms_c_write_shm(wlc, M_MIMO_ANTSEL_RXDFLT, mimo_antsel);
 	/* Update driver stats for currently selected default tx/rx antenna config */
 	asi->antcfg_cur.ant_config[ANT_SELCFG_RX_DEF] = ant_cfg;
 

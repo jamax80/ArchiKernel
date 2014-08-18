@@ -16,7 +16,8 @@
 
 #define ANT_SWCTRL_TBL_REV3_IDX (0)
 
-typedef phytbl_info_t mimophytbl_info_t;
+#include <types.h>
+#include "phy_int.h"
 
 extern const mimophytbl_info_t mimophytbl_info_rev0[],
     mimophytbl_info_rev0_volatile[];

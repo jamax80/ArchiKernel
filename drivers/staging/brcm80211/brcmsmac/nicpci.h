@@ -17,6 +17,8 @@
 #ifndef	_BRCM_NICPCI_H_
 #define	_BRCM_NICPCI_H_
 
+#include "types.h"
+
 /* PCI configuration address space size */
 #define PCI_SZPCR		256
 
@@ -67,8 +69,6 @@
 #define SRSH_PI_OFFSET	0	/* first word */
 #define SRSH_PI_MASK	0xf000	/* bit 15:12 */
 #define SRSH_PI_SHIFT	12	/* bit 15:12 */
-
-struct si_pub;
 
 extern void *pcicore_init(struct si_pub *sih, void *pdev, void *regs);
 extern void pcicore_deinit(void *pch);

@@ -16,24 +16,15 @@
 
 #define __UNDEF_NO_VERSION__
 
-#include <linux/kernel.h>
 #include <linux/etherdevice.h>
-#include <linux/types.h>
-#include <linux/pci_ids.h>
-#include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/sched.h>
 #include <linux/firmware.h>
 #include <net/mac80211.h>
 #include <defs.h>
-#include <brcmu_wifi.h>
-#include <brcmu_utils.h>
-#include <nicpci.h>
-#include "dma.h"
-
+#include "nicpci.h"
 #include "phy/phy_int.h"
 #include "d11.h"
-#include "types.h"
 #include "channel.h"
 #include "scb.h"
 #include "pub.h"
@@ -174,7 +165,7 @@ static void brcms_ops_tx(struct ieee80211_hw *hw, struct sk_buff *skb)
 		kfree_skb(skb);
 		goto done;
 	}
-	wlc_sendpkt_mac80211(wl->wlc, skb, hw);
+	brcms_c_sendpkt_mac80211(wl->wlc, skb, hw);
  done:
 	UNLOCK(wl);
 }
@@ -257,7 +248,7 @@ ieee_set_channel(struct ieee80211_hw *hw, struct ieee80211_channel *chan,
 	switch (type) {
 	case NL80211_CHAN_HT20:
 	case NL80211_CHAN_NO_HT:
-		err = wlc_set(wl->wlc, WLC_SET_CHANNEL, chan->hw_value);
+		err = brcms_c_set(wl->wlc, WLC_SET_CHANNEL, chan->hw_value);
 		break;
 	case NL80211_CHAN_HT40MINUS:
 	case NL80211_CHAN_HT40PLUS:
@@ -282,14 +273,14 @@ static int brcms_ops_config(struct ieee80211_hw *hw, u32 changed)
 
 	LOCK(wl);
 	if (changed & IEEE80211_CONF_CHANGE_LISTEN_INTERVAL) {
-		if (wlc_set_par(wl->wlc, IOV_BCN_LI_BCN, conf->listen_interval)
-		    < 0) {
+		if (brcms_c_set_par(wl->wlc, IOV_BCN_LI_BCN,
+				    conf->listen_interval) < 0) {
 			wiphy_err(wiphy, "%s: Error setting listen_interval\n",
 				  __func__);
 			err = -EIO;
 			goto config_out;
 		}
-		wlc_get_par(wl->wlc, IOV_BCN_LI_BCN, &new_int);
+		brcms_c_get_par(wl->wlc, IOV_BCN_LI_BCN, &new_int);
 	}
 	if (changed & IEEE80211_CONF_CHANGE_MONITOR)
 		wiphy_err(wiphy, "%s: change monitor mode: %s (implement)\n",
@@ -301,14 +292,14 @@ static int brcms_ops_config(struct ieee80211_hw *hw, u32 changed)
 			  "true" : "false");
 
 	if (changed & IEEE80211_CONF_CHANGE_POWER) {
-		if (wlc_set_par(wl->wlc, IOV_QTXPOWER, conf->power_level * 4)
-				< 0) {
+		if (brcms_c_set_par(wl->wlc, IOV_QTXPOWER,
+				    conf->power_level * 4) < 0) {
 			wiphy_err(wiphy, "%s: Error setting power_level\n",
 				  __func__);
 			err = -EIO;
 			goto config_out;
 		}
-		wlc_get_par(wl->wlc, IOV_QTXPOWER, &new_int);
+		brcms_c_get_par(wl->wlc, IOV_QTXPOWER, &new_int);
 		if (new_int != (conf->power_level * 4))
 			wiphy_err(wiphy, "%s: Power level req != actual, %d %d"
 				  "\n", __func__, conf->power_level * 4,
@@ -318,15 +309,15 @@ static int brcms_ops_config(struct ieee80211_hw *hw, u32 changed)
 		err = ieee_set_channel(hw, conf->channel, conf->channel_type);
 	}
 	if (changed & IEEE80211_CONF_CHANGE_RETRY_LIMITS) {
-		if (wlc_set
+		if (brcms_c_set
 		    (wl->wlc, WLC_SET_SRL,
 		     conf->short_frame_max_tx_count) < 0) {
 			wiphy_err(wiphy, "%s: Error setting srl\n", __func__);
 			err = -EIO;
 			goto config_out;
 		}
-		if (wlc_set(wl->wlc, WLC_SET_LRL, conf->long_frame_max_tx_count)
-		    < 0) {
+		if (brcms_c_set(wl->wlc, WLC_SET_LRL,
+				conf->long_frame_max_tx_count) < 0) {
 			wiphy_err(wiphy, "%s: Error setting lrl\n", __func__);
 			err = -EIO;
 			goto config_out;
@@ -354,7 +345,7 @@ brcms_ops_bss_info_changed(struct ieee80211_hw *hw,
 		wiphy_err(wiphy, "%s: %s: %sassociated\n", KBUILD_MODNAME,
 			  __func__, info->assoc ? "" : "dis");
 		LOCK(wl);
-		wlc_associate_upd(wl->wlc, info->assoc);
+		brcms_c_associate_upd(wl->wlc, info->assoc);
 		UNLOCK(wl);
 	}
 	if (changed & BSS_CHANGED_ERP_SLOT) {
@@ -364,7 +355,7 @@ brcms_ops_bss_info_changed(struct ieee80211_hw *hw,
 		else
 			val = 0;
 		LOCK(wl);
-		wlc_set(wl->wlc, WLC_SET_SHORTSLOT_OVERRIDE, val);
+		brcms_c_set(wl->wlc, WLC_SET_SHORTSLOT_OVERRIDE, val);
 		UNLOCK(wl);
 	}
 
@@ -373,11 +364,11 @@ brcms_ops_bss_info_changed(struct ieee80211_hw *hw,
 		u16 mode = info->ht_operation_mode;
 
 		LOCK(wl);
-		wlc_protection_upd(wl->wlc, WLC_PROT_N_CFG,
+		brcms_c_protection_upd(wl->wlc, WLC_PROT_N_CFG,
 			mode & IEEE80211_HT_OP_MODE_PROTECTION);
-		wlc_protection_upd(wl->wlc, WLC_PROT_N_NONGF,
+		brcms_c_protection_upd(wl->wlc, WLC_PROT_N_NONGF,
 			mode & IEEE80211_HT_OP_MODE_NON_GF_STA_PRSNT);
-		wlc_protection_upd(wl->wlc, WLC_PROT_N_OBSS,
+		brcms_c_protection_upd(wl->wlc, WLC_PROT_N_OBSS,
 			mode & IEEE80211_HT_OP_MODE_NON_HT_STA_PRSNT);
 		UNLOCK(wl);
 	}
@@ -390,7 +381,7 @@ brcms_ops_bss_info_changed(struct ieee80211_hw *hw,
 
 		/* retrieve the current rates */
 		LOCK(wl);
-		error = wlc_ioctl(wl->wlc, WLC_GET_CURR_RATESET,
+		error = brcms_c_ioctl(wl->wlc, WLC_GET_CURR_RATESET,
 				  &rs, sizeof(rs), NULL);
 		UNLOCK(wl);
 		if (error) {
@@ -399,7 +390,7 @@ brcms_ops_bss_info_changed(struct ieee80211_hw *hw,
 			return;
 		}
 		br_mask = info->basic_rates;
-		bi = hw->wiphy->bands[wlc_get_curband(wl->wlc)];
+		bi = hw->wiphy->bands[brcms_c_get_curband(wl->wlc)];
 		for (i = 0; i < bi->n_bitrates; i++) {
 			/* convert to internal rate value */
 			rate = (bi->bitrates[i].bitrate << 1) / 10;
@@ -411,19 +402,19 @@ brcms_ops_bss_info_changed(struct ieee80211_hw *hw,
 
 		/* update the rate set */
 		LOCK(wl);
-		wlc_ioctl(wl->wlc, WLC_SET_RATESET, &rs, sizeof(rs), NULL);
+		brcms_c_ioctl(wl->wlc, WLC_SET_RATESET, &rs, sizeof(rs), NULL);
 		UNLOCK(wl);
 	}
 	if (changed & BSS_CHANGED_BEACON_INT) {
 		/* Beacon interval changed */
 		LOCK(wl);
-		wlc_set(wl->wlc, WLC_SET_BCNPRD, info->beacon_int);
+		brcms_c_set(wl->wlc, WLC_SET_BCNPRD, info->beacon_int);
 		UNLOCK(wl);
 	}
 	if (changed & BSS_CHANGED_BSSID) {
 		/* BSSID changed, for whatever reason (IBSS and managed mode) */
 		LOCK(wl);
-		wlc_set_addrmatch(wl->wlc, RCM_BSSID_OFFSET,
+		brcms_c_set_addrmatch(wl->wlc, RCM_BSSID_OFFSET,
 				  info->bssid);
 		UNLOCK(wl);
 	}
@@ -490,9 +481,9 @@ brcms_ops_configure_filter(struct ieee80211_hw *hw,
 		LOCK(wl);
 		if (*total_flags & FIF_BCN_PRBRESP_PROMISC) {
 			wl->pub->mac80211_state |= MAC80211_PROMISC_BCNS;
-			wlc_mac_bcn_promisc_change(wl->wlc, 1);
+			brcms_c_mac_bcn_promisc_change(wl->wlc, 1);
 		} else {
-			wlc_mac_bcn_promisc_change(wl->wlc, 0);
+			brcms_c_mac_bcn_promisc_change(wl->wlc, 0);
 			wl->pub->mac80211_state &= ~MAC80211_PROMISC_BCNS;
 		}
 		UNLOCK(wl);
@@ -510,7 +501,7 @@ static void brcms_ops_sw_scan_start(struct ieee80211_hw *hw)
 {
 	struct brcms_info *wl = hw->priv;
 	LOCK(wl);
-	wlc_scan_start(wl->wlc);
+	brcms_c_scan_start(wl->wlc);
 	UNLOCK(wl);
 	return;
 }
@@ -519,7 +510,7 @@ static void brcms_ops_sw_scan_complete(struct ieee80211_hw *hw)
 {
 	struct brcms_info *wl = hw->priv;
 	LOCK(wl);
-	wlc_scan_stop(wl->wlc);
+	brcms_c_scan_stop(wl->wlc);
 	UNLOCK(wl);
 	return;
 }
@@ -567,7 +558,7 @@ brcms_ops_conf_tx(struct ieee80211_hw *hw, u16 queue,
 	struct brcms_info *wl = hw->priv;
 
 	LOCK(wl);
-	wlc_wme_setparams(wl->wlc, queue, params, true);
+	brcms_c_wme_setparams(wl->wlc, queue, params, true);
 	UNLOCK(wl);
 
 	return 0;
@@ -641,7 +632,7 @@ brcms_ops_ampdu_action(struct ieee80211_hw *hw,
 		break;
 	case IEEE80211_AMPDU_TX_START:
 		LOCK(wl);
-		status = wlc_aggregatable(wl->wlc, tid);
+		status = brcms_c_aggregatable(wl->wlc, tid);
 		UNLOCK(wl);
 		if (!status) {
 			wiphy_err(wl->wiphy, "START: tid %d is not agg\'able\n",
@@ -655,7 +646,7 @@ brcms_ops_ampdu_action(struct ieee80211_hw *hw,
 
 	case IEEE80211_AMPDU_TX_STOP:
 		LOCK(wl);
-		wlc_ampdu_flush(wl->wlc, sta, tid);
+		brcms_c_ampdu_flush(wl->wlc, sta, tid);
 		UNLOCK(wl);
 		ieee80211_stop_tx_ba_cb_irqsafe(vif, sta->addr, tid);
 		break;
@@ -677,7 +668,7 @@ static void brcms_ops_rfkill_poll(struct ieee80211_hw *hw)
 	bool blocked;
 
 	LOCK(wl);
-	blocked = wlc_check_radio_disabled(wl->wlc);
+	blocked = brcms_c_check_radio_disabled(wl->wlc);
 	UNLOCK(wl);
 
 	wiphy_rfkill_set_hw_state(wl->pub->ieee_hw->wiphy, blocked);
@@ -691,7 +682,7 @@ static void brcms_ops_flush(struct ieee80211_hw *hw, bool drop)
 
 	/* wait for packet queue and dma fifos to run empty */
 	LOCK(wl);
-	wlc_wait_for_tx_completion(wl->wlc, drop);
+	brcms_c_wait_for_tx_completion(wl->wlc, drop);
 	UNLOCK(wl);
 }
 
@@ -801,19 +792,19 @@ static struct brcms_info *brcms_attach(u16 vendor, u16 device,
 	}
 
 	/* common load-time initialization */
-	wl->wlc = wlc_attach((void *)wl, vendor, device, unit, false,
+	wl->wlc = brcms_c_attach((void *)wl, vendor, device, unit, false,
 			     wl->regsva, wl->bcm_bustype, btparam, &err);
 	brcms_release_fw(wl);
 	if (!wl->wlc) {
-		wiphy_err(wl->wiphy, "%s: wlc_attach() failed with code %d\n",
+		wiphy_err(wl->wiphy, "%s: attach() failed with code %d\n",
 			  KBUILD_MODNAME, err);
 		goto fail;
 	}
-	wl->pub = wlc_pub(wl->wlc);
+	wl->pub = brcms_c_pub(wl->wlc);
 
 	wl->pub->ieee_hw = hw;
 
-	if (wlc_set_par(wl->wlc, IOV_MPC, 0) < 0) {
+	if (brcms_c_set_par(wl->wlc, IOV_MPC, 0) < 0) {
 		wiphy_err(wl->wiphy, "wl%d: Error setting MPC variable to 0\n",
 			  unit);
 	}
@@ -826,7 +817,7 @@ static struct brcms_info *brcms_attach(u16 vendor, u16 device,
 	wl->irq = irq;
 
 	/* register module */
-	wlc_module_register(wl->pub, "linux", wl, wl_linux_watchdog, NULL);
+	brcms_c_module_register(wl->pub, "linux", wl, wl_linux_watchdog, NULL);
 
 	if (ieee_hw_init(hw)) {
 		wiphy_err(wl->wiphy, "wl%d: %s: ieee_hw_init failed!\n", unit,
@@ -1044,9 +1035,8 @@ static int ieee_hw_rate_init(struct ieee80211_hw *hw)
 	hw->wiphy->bands[IEEE80211_BAND_2GHZ] = NULL;
 	hw->wiphy->bands[IEEE80211_BAND_5GHZ] = NULL;
 
-	if (wlc_get(wl->wlc, WLC_GET_PHYLIST, (int *)&phy_list) < 0) {
+	if (brcms_c_get(wl->wlc, WLC_GET_PHYLIST, (int *)&phy_list) < 0)
 		wiphy_err(hw->wiphy, "Phy list failed\n");
-	}
 
 	if (phy_list[0] == 'n' || phy_list[0] == 'c') {
 		if (phy_list[0] == 'c') {
@@ -1082,7 +1072,7 @@ static int ieee_hw_init(struct ieee80211_hw *hw)
 	    | IEEE80211_HW_REPORTS_TX_ACK_STATUS
 	    | IEEE80211_HW_AMPDU_AGGREGATION;
 
-	hw->extra_tx_headroom = wlc_get_header_len();
+	hw->extra_tx_headroom = brcms_c_get_header_len();
 	hw->queues = N_TX_QUEUES;
 	/* FIXME: this doesn't seem to be used properly in minstrel_ht.
 	 * mac80211/status.c:ieee80211_tx_status() checks this value,
@@ -1243,10 +1233,10 @@ static void brcms_remove(struct pci_dev *pdev)
 	}
 
 	LOCK(wl);
-	status = wlc_chipmatch(pdev->vendor, pdev->device);
+	status = brcms_c_chipmatch(pdev->vendor, pdev->device);
 	UNLOCK(wl);
 	if (!status) {
-		wiphy_err(wl->wiphy, "wl: brcms_remove: wlc_chipmatch "
+		wiphy_err(wl->wiphy, "wl: brcms_remove: chipmatch "
 				     "failed\n");
 		return;
 	}
@@ -1341,12 +1331,12 @@ static void brcms_free(struct brcms_info *wl)
 	tasklet_kill(&wl->tasklet);
 
 	if (wl->pub) {
-		wlc_module_unregister(wl->pub, "linux", wl);
+		brcms_c_module_unregister(wl->pub, "linux", wl);
 	}
 
 	/* free common resources */
 	if (wl->wlc) {
-		wlc_detach(wl->wlc);
+		brcms_c_detach(wl->wlc);
 		wl->wlc = NULL;
 		wl->pub = NULL;
 	}
@@ -1411,7 +1401,7 @@ void brcms_init(struct brcms_info *wl)
 	BCMMSG(WL_TO_HW(wl)->wiphy, "wl%d\n", wl->pub->unit);
 	brcms_reset(wl);
 
-	wlc_init(wl->wlc);
+	brcms_c_init(wl->wlc);
 }
 
 /*
@@ -1420,7 +1410,7 @@ void brcms_init(struct brcms_info *wl)
 uint brcms_reset(struct brcms_info *wl)
 {
 	BCMMSG(WL_TO_HW(wl)->wiphy, "wl%d\n", wl->pub->unit);
-	wlc_reset(wl->wlc);
+	brcms_c_reset(wl->wlc);
 
 	/* dpc will not be rescheduled */
 	wl->resched = 0;
@@ -1437,7 +1427,7 @@ void brcms_intrson(struct brcms_info *wl)
 	unsigned long flags;
 
 	INT_LOCK(wl, flags);
-	wlc_intrson(wl->wlc);
+	brcms_c_intrson(wl->wlc);
 	INT_UNLOCK(wl, flags);
 }
 
@@ -1455,7 +1445,7 @@ u32 brcms_intrsoff(struct brcms_info *wl)
 	u32 status;
 
 	INT_LOCK(wl, flags);
-	status = wlc_intrsoff(wl->wlc);
+	status = brcms_c_intrsoff(wl->wlc);
 	INT_UNLOCK(wl, flags);
 	return status;
 }
@@ -1465,7 +1455,7 @@ void brcms_intrsrestore(struct brcms_info *wl, u32 macintmask)
 	unsigned long flags;
 
 	INT_LOCK(wl, flags);
-	wlc_intrsrestore(wl->wlc, macintmask);
+	brcms_c_intrsrestore(wl->wlc, macintmask);
 	INT_UNLOCK(wl, flags);
 }
 
@@ -1479,7 +1469,7 @@ int brcms_up(struct brcms_info *wl)
 	if (wl->pub->up)
 		return 0;
 
-	error = wlc_up(wl->wlc);
+	error = brcms_c_up(wl->wlc);
 
 	return error;
 }
@@ -1492,7 +1482,7 @@ void brcms_down(struct brcms_info *wl)
 	uint callbacks, ret_val = 0;
 
 	/* call common down function */
-	ret_val = wlc_down(wl->wlc);
+	ret_val = brcms_c_down(wl->wlc);
 	callbacks = atomic_read(&wl->callbacks) - ret_val;
 
 	/* wait for down callbacks to complete */
@@ -1517,7 +1507,7 @@ static irqreturn_t brcms_isr(int irq, void *dev_id)
 	ISR_LOCK(wl, flags);
 
 	/* call common first level interrupt handler */
-	ours = wlc_isr(wl->wlc, &wantdpc);
+	ours = brcms_c_isr(wl->wlc, &wantdpc);
 	if (ours) {
 		/* if more to do... */
 		if (wantdpc) {
@@ -1547,14 +1537,14 @@ static void brcms_dpc(unsigned long data)
 			unsigned long flags;
 
 			INT_LOCK(wl, flags);
-			wlc_intrsupd(wl->wlc);
+			brcms_c_intrsupd(wl->wlc);
 			INT_UNLOCK(wl, flags);
 		}
 
-		wl->resched = wlc_dpc(wl->wlc, true);
+		wl->resched = brcms_c_dpc(wl->wlc, true);
 	}
 
-	/* wlc_dpc() may bring the driver down */
+	/* brcms_c_dpc() may bring the driver down */
 	if (!wl->pub->up)
 		goto done;
 
@@ -1917,7 +1907,7 @@ int brcms_check_firmwares(struct brcms_info *wl)
  */
 bool brcms_rfkill_set_hw_state(struct brcms_info *wl)
 {
-	bool blocked = wlc_check_radio_disabled(wl->wlc);
+	bool blocked = brcms_c_check_radio_disabled(wl->wlc);
 
 	UNLOCK(wl);
 	wiphy_rfkill_set_hw_state(wl->pub->ieee_hw->wiphy, blocked);

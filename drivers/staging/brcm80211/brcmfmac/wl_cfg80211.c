@@ -17,28 +17,24 @@
 #include <linux/kernel.h>
 #include <linux/if_arp.h>
 #include <linux/sched.h>
-
-#include <brcmu_utils.h>
-#include <defs.h>
-#include <brcmu_wifi.h>
-
-#include <asm/uaccess.h>
-
-#include <dngl_stats.h>
-#include <dhd.h>
-
 #include <linux/kthread.h>
 #include <linux/netdevice.h>
 #include <linux/sched.h>
 #include <linux/etherdevice.h>
 #include <linux/wireless.h>
 #include <linux/ieee80211.h>
-#include <net/cfg80211.h>
-
-#include <net/rtnetlink.h>
 #include <linux/mmc/sdio_func.h>
 #include <linux/firmware.h>
-#include <wl_cfg80211.h>
+#include <linux/uaccess.h>
+#include <net/cfg80211.h>
+#include <net/rtnetlink.h>
+
+#include <brcmu_utils.h>
+#include <defs.h>
+#include <brcmu_wifi.h>
+#include "dngl_stats.h"
+#include "dhd.h"
+#include "wl_cfg80211.h"
 
 void sdioh_sdio_set_host_pm_flags(int flag);
 
@@ -105,7 +101,8 @@ static s32 wl_cfg80211_config_default_mgmt_key(struct wiphy *wiphy,
 						 struct net_device *dev,
 						 u8 key_idx);
 static s32 wl_cfg80211_resume(struct wiphy *wiphy);
-static s32 wl_cfg80211_suspend(struct wiphy *wiphy);
+static s32 wl_cfg80211_suspend(struct wiphy *wiphy,
+				 struct cfg80211_wowlan *wow);
 static s32 wl_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *dev,
 				   struct cfg80211_pmksa *pmksa);
 static s32 wl_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *dev,
@@ -327,9 +324,8 @@ static void wl_debugfs_remove_netdev(struct wl_priv *wl);
 
 #define WL_PRIV_GET() 							\
 	({								\
-	struct wl_iface *ci;						\
-	if (unlikely(!(wl_cfg80211_dev && 				\
-		(ci = wl_get_drvdata(wl_cfg80211_dev))))) {		\
+	struct wl_iface *ci = wl_get_drvdata(wl_cfg80211_dev);		\
+	if (unlikely(!ci)) {						\
 		WL_ERR("wl_cfg80211_dev is unavailable\n");		\
 		BUG();							\
 	} 								\
@@ -2097,7 +2093,7 @@ static s32 wl_cfg80211_resume(struct wiphy *wiphy)
 	return 0;
 }
 
-static s32 wl_cfg80211_suspend(struct wiphy *wiphy)
+static s32 wl_cfg80211_suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow)
 {
 	struct wl_priv *wl = wiphy_to_wl(wiphy);
 	struct net_device *ndev = wl_to_ndev(wl);
@@ -2114,8 +2110,9 @@ static s32 wl_cfg80211_suspend(struct wiphy *wiphy)
 	 * While going to suspend if associated with AP disassociate
 	 * from AP to save power while system is in suspended state
 	 */
-	if (test_bit(WL_STATUS_CONNECTED, &wl->status) &&
-		test_bit(WL_STATUS_READY, &wl->status)) {
+	if ((test_bit(WL_STATUS_CONNECTED, &wl->status) ||
+	     test_bit(WL_STATUS_CONNECTING, &wl->status)) &&
+	     test_bit(WL_STATUS_READY, &wl->status)) {
 		WL_INFO("Disassociating from AP"
 			" while entering suspend state\n");
 		wl_link_down(wl);
@@ -2142,8 +2139,6 @@ static s32 wl_cfg80211_suspend(struct wiphy *wiphy)
 	}
 	clear_bit(WL_STATUS_SCANNING, &wl->status);
 	clear_bit(WL_STATUS_SCAN_ABORTING, &wl->status);
-	clear_bit(WL_STATUS_CONNECTING, &wl->status);
-	clear_bit(WL_STATUS_CONNECTED, &wl->status);
 
 	/* Inform SDIO stack not to switch off power to the chip */
 	sdioh_sdio_set_host_pm_flags(MMC_PM_KEEP_POWER);
@@ -2588,11 +2583,11 @@ static bool wl_is_nonetwork(struct wl_priv *wl, const wl_event_msg_t *e)
 {
 	u32 event = be32_to_cpu(e->event_type);
 	u32 status = be32_to_cpu(e->status);
-	u16 flags = be16_to_cpu(e->flags);
 
 	if (event == WLC_E_LINK && status == WLC_E_STATUS_NO_NETWORKS) {
 		WL_CONN("Processing Link %s & no network found\n",
-				flags & WLC_EVENT_MSG_LINK ? "up" : "down");
+				be16_to_cpu(e->flags) & WLC_EVENT_MSG_LINK ?
+				"up" : "down");
 		return true;
 	}
 
@@ -2624,10 +2619,12 @@ wl_notify_connect_status(struct wl_priv *wl, struct net_device *ndev,
 	} else if (wl_is_linkdown(wl, e)) {
 		WL_CONN("Linkdown\n");
 		if (wl_is_ibssmode(wl)) {
+			clear_bit(WL_STATUS_CONNECTING, &wl->status);
 			if (test_and_clear_bit(WL_STATUS_CONNECTED,
 				&wl->status))
 				wl_link_down(wl);
 		} else {
+			wl_bss_connect_done(wl, ndev, e, data, false);
 			if (test_and_clear_bit(WL_STATUS_CONNECTED,
 				&wl->status)) {
 				cfg80211_disconnected(ndev, 0, NULL, 0,
@@ -4103,6 +4100,25 @@ static s32 __wl_cfg80211_up(struct wl_priv *wl)
 
 static s32 __wl_cfg80211_down(struct wl_priv *wl)
 {
+	/*
+	 * While going down, if associated with AP disassociate
+	 * from AP to save power
+	 */
+	if ((test_bit(WL_STATUS_CONNECTED, &wl->status) ||
+	     test_bit(WL_STATUS_CONNECTING, &wl->status)) &&
+	     test_bit(WL_STATUS_READY, &wl->status)) {
+		WL_INFO("Disassociating from AP");
+		wl_link_down(wl);
+
+		/* Make sure WPA_Supplicant receives all the event
+		   generated due to DISASSOC call to the fw to keep
+		   the state fw and WPA_Supplicant state consistent
+		 */
+		rtnl_unlock();
+		wl_delay(500);
+		rtnl_lock();
+	}
+
 	set_bit(WL_STATUS_SCAN_ABORTING, &wl->status);
 	wl_term_iscan(wl);
 	if (wl->scan_request) {
@@ -4114,8 +4130,6 @@ static s32 __wl_cfg80211_down(struct wl_priv *wl)
 	clear_bit(WL_STATUS_READY, &wl->status);
 	clear_bit(WL_STATUS_SCANNING, &wl->status);
 	clear_bit(WL_STATUS_SCAN_ABORTING, &wl->status);
-	clear_bit(WL_STATUS_CONNECTING, &wl->status);
-	clear_bit(WL_STATUS_CONNECTED, &wl->status);
 
 	wl_debugfs_remove_netdev(wl);
 
@@ -4150,13 +4164,7 @@ s32 wl_cfg80211_down(void)
 
 static s32 wl_dongle_probecap(struct wl_priv *wl)
 {
-	s32 err = 0;
-
-	err = wl_update_wiphybands(wl);
-	if (unlikely(err))
-		return err;
-
-	return err;
+	return wl_update_wiphybands(wl);
 }
 
 static void *wl_read_prof(struct wl_priv *wl, s32 item)
@@ -4234,14 +4242,12 @@ static __used s32 wl_add_ie(struct wl_priv *wl, u8 t, u8 l, u8 *v)
 	return err;
 }
 
-
 static void wl_link_down(struct wl_priv *wl)
 {
 	struct net_device *dev = NULL;
 	s32 err = 0;
 
 	WL_TRACE("Enter\n");
-	clear_bit(WL_STATUS_CONNECTED, &wl->status);
 
 	if (wl->link_up) {
 		dev = wl_to_ndev(wl);
@@ -4286,7 +4292,11 @@ static void wl_set_drvdata(struct wl_dev *dev, void *data)
 
 static void *wl_get_drvdata(struct wl_dev *dev)
 {
-	return dev->driver_data;
+	void *data = NULL;
+
+	if (dev)
+		data = dev->driver_data;
+	return data;
 }
 
 s32 wl_cfg80211_read_fw(s8 *buf, u32 size)

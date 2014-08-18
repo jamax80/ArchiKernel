@@ -14,20 +14,11 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <linux/kernel.h>
-#include <linux/module.h>
-
-#include <defs.h>
-#include <brcmu_utils.h>
-#include <aiutils.h>
-#include <brcmu_wifi.h>
-#include "dma.h"
+#include <net/mac80211.h>
 
 #include "types.h"
 #include "d11.h"
 #include "rate.h"
-#include "scb.h"
-#include "pub.h"
 #include "phy/phy_hal.h"
 #include "channel.h"
 #include "main.h"
@@ -40,13 +31,14 @@
 #define WLC_STF_SS_STBC_RX(wlc) (WLCISNPHY(wlc->band) && \
 	NREV_GT(wlc->band->phyrev, 3) && NREV_LE(wlc->band->phyrev, 6))
 
-static bool wlc_stf_stbc_tx_set(struct wlc_info *wlc, s32 int_val);
-static int wlc_stf_txcore_set(struct wlc_info *wlc, u8 Nsts, u8 val);
-static int wlc_stf_spatial_policy_set(struct wlc_info *wlc, int val);
-static void wlc_stf_stbc_rx_ht_update(struct wlc_info *wlc, int val);
+static bool brcms_c_stf_stbc_tx_set(struct brcms_c_info *wlc, s32 int_val);
+static int brcms_c_stf_txcore_set(struct brcms_c_info *wlc, u8 Nsts, u8 val);
+static int brcms_c_stf_spatial_policy_set(struct brcms_c_info *wlc, int val);
+static void brcms_c_stf_stbc_rx_ht_update(struct brcms_c_info *wlc, int val);
 
-static void _wlc_stf_phy_txant_upd(struct wlc_info *wlc);
-static u16 _wlc_stf_phytxchain_sel(struct wlc_info *wlc, ratespec_t rspec);
+static void _brcms_c_stf_phy_txant_upd(struct brcms_c_info *wlc);
+static u16 _brcms_c_stf_phytxchain_sel(struct brcms_c_info *wlc,
+				       ratespec_t rspec);
 
 #define NSTS_1	1
 #define NSTS_2	2
@@ -60,7 +52,7 @@ const u8 txcore_default[5] = {
 	(0x0f)			/* For Nsts = 4, enable all cores */
 };
 
-static void wlc_stf_stbc_rx_ht_update(struct wlc_info *wlc, int val)
+static void brcms_c_stf_stbc_rx_ht_update(struct brcms_c_info *wlc, int val)
 {
 	/* MIMOPHYs rev3-6 cannot receive STBC with only one rx core active */
 	if (WLC_STF_SS_STBC_RX(wlc)) {
@@ -72,13 +64,13 @@ static void wlc_stf_stbc_rx_ht_update(struct wlc_info *wlc, int val)
 	wlc->ht_cap.cap_info |= (val << IEEE80211_HT_CAP_RX_STBC_SHIFT);
 
 	if (wlc->pub->up) {
-		wlc_update_beacon(wlc);
-		wlc_update_probe_resp(wlc, true);
+		brcms_c_update_beacon(wlc);
+		brcms_c_update_probe_resp(wlc, true);
 	}
 }
 
 /* every WLC_TEMPSENSE_PERIOD seconds temperature check to decide whether to turn on/off txchain */
-void wlc_tempsense_upd(struct wlc_info *wlc)
+void brcms_c_tempsense_upd(struct brcms_c_info *wlc)
 {
 	wlc_phy_t *pi = wlc->band->pi;
 	uint active_chains, txchain;
@@ -91,18 +83,18 @@ void wlc_tempsense_upd(struct wlc_info *wlc)
 	if (wlc->stf->txchain == wlc->stf->hw_txchain) {
 		if (txchain && (txchain < wlc->stf->hw_txchain)) {
 			/* turn off 1 tx chain */
-			wlc_stf_txchain_set(wlc, txchain, true);
+			brcms_c_stf_txchain_set(wlc, txchain, true);
 		}
 	} else if (wlc->stf->txchain < wlc->stf->hw_txchain) {
 		if (txchain == wlc->stf->hw_txchain) {
 			/* turn back on txchain */
-			wlc_stf_txchain_set(wlc, txchain, true);
+			brcms_c_stf_txchain_set(wlc, txchain, true);
 		}
 	}
 }
 
 void
-wlc_stf_ss_algo_channel_get(struct wlc_info *wlc, u16 *ss_algo_channel,
+brcms_c_stf_ss_algo_channel_get(struct brcms_c_info *wlc, u16 *ss_algo_channel,
 			    chanspec_t chanspec)
 {
 	tx_power_t power;
@@ -143,7 +135,7 @@ wlc_stf_ss_algo_channel_get(struct wlc_info *wlc, u16 *ss_algo_channel,
 		setbit(ss_algo_channel, PHY_TXC1_MODE_STBC);
 }
 
-static bool wlc_stf_stbc_tx_set(struct wlc_info *wlc, s32 int_val)
+static bool brcms_c_stf_stbc_tx_set(struct brcms_c_info *wlc, s32 int_val)
 {
 	if ((int_val != AUTO) && (int_val != OFF) && (int_val != ON)) {
 		return false;
@@ -164,7 +156,7 @@ static bool wlc_stf_stbc_tx_set(struct wlc_info *wlc, s32 int_val)
 	return true;
 }
 
-bool wlc_stf_stbc_rx_set(struct wlc_info *wlc, s32 int_val)
+bool brcms_c_stf_stbc_rx_set(struct brcms_c_info *wlc, s32 int_val)
 {
 	if ((int_val != HT_CAP_RX_STBC_NO)
 	    && (int_val != HT_CAP_RX_STBC_ONE_STREAM)) {
@@ -177,11 +169,12 @@ bool wlc_stf_stbc_rx_set(struct wlc_info *wlc, s32 int_val)
 			return false;
 	}
 
-	wlc_stf_stbc_rx_ht_update(wlc, int_val);
+	brcms_c_stf_stbc_rx_ht_update(wlc, int_val);
 	return true;
 }
 
-static int wlc_stf_txcore_set(struct wlc_info *wlc, u8 Nsts, u8 core_mask)
+static int brcms_c_stf_txcore_set(struct brcms_c_info *wlc, u8 Nsts,
+				  u8 core_mask)
 {
 	BCMMSG(wlc->wiphy, "wl%d: Nsts %d core_mask %x\n",
 		 wlc->pub->unit, Nsts, core_mask);
@@ -203,18 +196,18 @@ static int wlc_stf_txcore_set(struct wlc_info *wlc, u8 Nsts, u8 core_mask)
 		 * frames when 1 stream core map changed
 		 */
 		wlc->stf->phytxant = core_mask << PHY_TXC_ANT_SHIFT;
-		wlc_bmac_txant_set(wlc->hw, wlc->stf->phytxant);
+		brcms_b_txant_set(wlc->hw, wlc->stf->phytxant);
 		if (wlc->clk) {
-			wlc_suspend_mac_and_wait(wlc);
-			wlc_beacon_phytxctl_txant_upd(wlc, wlc->bcn_rspec);
-			wlc_enable_mac(wlc);
+			brcms_c_suspend_mac_and_wait(wlc);
+			brcms_c_beacon_phytxctl_txant_upd(wlc, wlc->bcn_rspec);
+			brcms_c_enable_mac(wlc);
 		}
 	}
 
 	return 0;
 }
 
-static int wlc_stf_spatial_policy_set(struct wlc_info *wlc, int val)
+static int brcms_c_stf_spatial_policy_set(struct brcms_c_info *wlc, int val)
 {
 	int i;
 	u8 core_mask = 0;
@@ -225,12 +218,12 @@ static int wlc_stf_spatial_policy_set(struct wlc_info *wlc, int val)
 	for (i = 1; i <= MAX_STREAMS_SUPPORTED; i++) {
 		core_mask = (val == MAX_SPATIAL_EXPANSION) ?
 		    wlc->stf->txchain : txcore_default[i];
-		wlc_stf_txcore_set(wlc, (u8) i, core_mask);
+		brcms_c_stf_txcore_set(wlc, (u8) i, core_mask);
 	}
 	return 0;
 }
 
-int wlc_stf_txchain_set(struct wlc_info *wlc, s32 int_val, bool force)
+int brcms_c_stf_txchain_set(struct brcms_c_info *wlc, s32 int_val, bool force)
 {
 	u8 txchain = (u8) int_val;
 	u8 txstreams;
@@ -280,24 +273,24 @@ int wlc_stf_txchain_set(struct wlc_info *wlc, s32 int_val, bool force)
 
 	wlc->stf->txchain = txchain;
 	wlc->stf->txstreams = txstreams;
-	wlc_stf_stbc_tx_set(wlc, wlc->band->band_stf_stbc_tx);
-	wlc_stf_ss_update(wlc, wlc->bandstate[BAND_2G_INDEX]);
-	wlc_stf_ss_update(wlc, wlc->bandstate[BAND_5G_INDEX]);
+	brcms_c_stf_stbc_tx_set(wlc, wlc->band->band_stf_stbc_tx);
+	brcms_c_stf_ss_update(wlc, wlc->bandstate[BAND_2G_INDEX]);
+	brcms_c_stf_ss_update(wlc, wlc->bandstate[BAND_5G_INDEX]);
 	wlc->stf->txant =
 	    (wlc->stf->txstreams == 1) ? ANT_TX_FORCE_0 : ANT_TX_DEF;
-	_wlc_stf_phy_txant_upd(wlc);
+	_brcms_c_stf_phy_txant_upd(wlc);
 
 	wlc_phy_stf_chain_set(wlc->band->pi, wlc->stf->txchain,
 			      wlc->stf->rxchain);
 
 	for (i = 1; i <= MAX_STREAMS_SUPPORTED; i++)
-		wlc_stf_txcore_set(wlc, (u8) i, txcore_default[i]);
+		brcms_c_stf_txcore_set(wlc, (u8) i, txcore_default[i]);
 
 	return 0;
 }
 
 /* update wlc->stf->ss_opmode which represents the operational stf_ss mode we're using */
-int wlc_stf_ss_update(struct wlc_info *wlc, struct wlcband *band)
+int brcms_c_stf_ss_update(struct brcms_c_info *wlc, struct brcms_c_band *band)
 {
 	int ret_code = 0;
 	u8 prev_stf_ss;
@@ -323,13 +316,13 @@ int wlc_stf_ss_update(struct wlc_info *wlc, struct wlcband *band)
 	}
 	if (prev_stf_ss != upd_stf_ss) {
 		wlc->stf->ss_opmode = upd_stf_ss;
-		wlc_bmac_band_stf_ss_set(wlc->hw, upd_stf_ss);
+		brcms_b_band_stf_ss_set(wlc->hw, upd_stf_ss);
 	}
 
 	return ret_code;
 }
 
-int wlc_stf_attach(struct wlc_info *wlc)
+int brcms_c_stf_attach(struct brcms_c_info *wlc)
 {
 	wlc->bandstate[BAND_2G_INDEX]->band_stf_ss_mode = PHY_TXC1_MODE_SISO;
 	wlc->bandstate[BAND_5G_INDEX]->band_stf_ss_mode = PHY_TXC1_MODE_CDD;
@@ -338,10 +331,10 @@ int wlc_stf_attach(struct wlc_info *wlc)
 	    (wlc_phy_txpower_hw_ctrl_get(wlc->band->pi) != PHY_TPC_HW_ON))
 		wlc->bandstate[BAND_2G_INDEX]->band_stf_ss_mode =
 		    PHY_TXC1_MODE_CDD;
-	wlc_stf_ss_update(wlc, wlc->bandstate[BAND_2G_INDEX]);
-	wlc_stf_ss_update(wlc, wlc->bandstate[BAND_5G_INDEX]);
+	brcms_c_stf_ss_update(wlc, wlc->bandstate[BAND_2G_INDEX]);
+	brcms_c_stf_ss_update(wlc, wlc->bandstate[BAND_5G_INDEX]);
 
-	wlc_stf_stbc_rx_ht_update(wlc, HT_CAP_RX_STBC_NO);
+	brcms_c_stf_stbc_rx_ht_update(wlc, HT_CAP_RX_STBC_NO);
 	wlc->bandstate[BAND_2G_INDEX]->band_stf_stbc_tx = OFF;
 	wlc->bandstate[BAND_5G_INDEX]->band_stf_stbc_tx = OFF;
 
@@ -352,7 +345,7 @@ int wlc_stf_attach(struct wlc_info *wlc)
 	return 0;
 }
 
-void wlc_stf_detach(struct wlc_info *wlc)
+void brcms_c_stf_detach(struct brcms_c_info *wlc)
 {
 }
 
@@ -370,7 +363,7 @@ void wlc_stf_detach(struct wlc_info *wlc)
  *    do tx-antenna selection for SISO transmissions
  * for NREV>=7, bit 6 and bit 7 mean antenna 0 and 1 respectively, nit6+bit7 means both cores active
 */
-static void _wlc_stf_phy_txant_upd(struct wlc_info *wlc)
+static void _brcms_c_stf_phy_txant_upd(struct brcms_c_info *wlc)
 {
 	s8 txant;
 
@@ -405,15 +398,15 @@ static void _wlc_stf_phy_txant_upd(struct wlc_info *wlc)
 			wlc->stf->phytxant = PHY_TXC_OLD_ANT_LAST;
 	}
 
-	wlc_bmac_txant_set(wlc->hw, wlc->stf->phytxant);
+	brcms_b_txant_set(wlc->hw, wlc->stf->phytxant);
 }
 
-void wlc_stf_phy_txant_upd(struct wlc_info *wlc)
+void brcms_c_stf_phy_txant_upd(struct brcms_c_info *wlc)
 {
-	_wlc_stf_phy_txant_upd(wlc);
+	_brcms_c_stf_phy_txant_upd(wlc);
 }
 
-void wlc_stf_phy_chain_calc(struct wlc_info *wlc)
+void brcms_c_stf_phy_chain_calc(struct brcms_c_info *wlc)
 {
 	/* get available rx/tx chains */
 	wlc->stf->hw_txchain = (u8) getintvar(wlc->pub->vars, "txchain");
@@ -447,10 +440,11 @@ void wlc_stf_phy_chain_calc(struct wlc_info *wlc)
 
 	/* default spatial_policy */
 	wlc->stf->spatial_policy = MIN_SPATIAL_EXPANSION;
-	wlc_stf_spatial_policy_set(wlc, MIN_SPATIAL_EXPANSION);
+	brcms_c_stf_spatial_policy_set(wlc, MIN_SPATIAL_EXPANSION);
 }
 
-static u16 _wlc_stf_phytxchain_sel(struct wlc_info *wlc, ratespec_t rspec)
+static u16 _brcms_c_stf_phytxchain_sel(struct brcms_c_info *wlc,
+				       ratespec_t rspec)
 {
 	u16 phytxant = wlc->stf->phytxant;
 
@@ -462,19 +456,19 @@ static u16 _wlc_stf_phytxchain_sel(struct wlc_info *wlc, ratespec_t rspec)
 	return phytxant;
 }
 
-u16 wlc_stf_phytxchain_sel(struct wlc_info *wlc, ratespec_t rspec)
+u16 brcms_c_stf_phytxchain_sel(struct brcms_c_info *wlc, ratespec_t rspec)
 {
-	return _wlc_stf_phytxchain_sel(wlc, rspec);
+	return _brcms_c_stf_phytxchain_sel(wlc, rspec);
 }
 
-u16 wlc_stf_d11hdrs_phyctl_txant(struct wlc_info *wlc, ratespec_t rspec)
+u16 brcms_c_stf_d11hdrs_phyctl_txant(struct brcms_c_info *wlc, ratespec_t rspec)
 {
 	u16 phytxant = wlc->stf->phytxant;
 	u16 mask = PHY_TXC_ANT_MASK;
 
 	/* for non-siso rates or default setting, use the available chains */
 	if (WLCISNPHY(wlc->band)) {
-		phytxant = _wlc_stf_phytxchain_sel(wlc, rspec);
+		phytxant = _brcms_c_stf_phytxchain_sel(wlc, rspec);
 		mask = PHY_TXC_HTANT_MASK;
 	}
 	phytxant |= phytxant & mask;

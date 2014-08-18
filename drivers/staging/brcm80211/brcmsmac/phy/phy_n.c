@@ -14,23 +14,19 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <linux/kernel.h>
-#include <linux/string.h>
-#include <defs.h>
 #include <linux/delay.h>
-#include <linux/pci.h>
+
+#include <brcm_hw_ids.h>
 #include <aiutils.h>
 #include <chipcommon.h>
 #include <pmu.h>
-
-#include <brcm_hw_ids.h>
-#include <dma.h>
-
-#include <types.h>
-#include <phy_radio.h>
-#include <phy_int.h>
-#include <phyreg_n.h>
-#include <phytbl_n.h>
+#include <d11.h>
+#include <phy_shim.h>
+#include "phy_int.h"
+#include "phy_hal.h"
+#include "phy_radio.h"
+#include "phyreg_n.h"
+#include "phytbl_n.h"
 
 #define	READ_RADIO_REG2(pi, radio_type, jspace, core, reg_name) \
 	read_radio_reg(pi, radio_type##_##jspace##_##reg_name | \
@@ -23460,7 +23456,7 @@ wlc_phy_est_tonepwr_nphy(phy_info_t *pi, s32 *qdBm_pwrbuf, u8 num_samps)
 
 	tssi_type =
 	    CHSPEC_IS5G(pi->radio_chanspec) ?
-	    (u8)NPHY_RSSI_SEL_TSSI_5G:(u8)NPHY_RSSI_SEL_TSSI_2G;
+	    (u8)NPHY_RSSI_SEL_TSSI_5G : (u8)NPHY_RSSI_SEL_TSSI_2G;
 
 	wlc_phy_poll_rssi_nphy(pi, tssi_type, rssi_buf, num_samps);
 

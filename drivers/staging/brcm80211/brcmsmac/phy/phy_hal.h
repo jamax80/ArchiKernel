@@ -21,11 +21,9 @@
 #ifndef _BRCM_PHY_HAL_H_
 #define _BRCM_PHY_HAL_H_
 
-#include <aiutils.h>
-#include <d11.h>
+#include <brcmu_utils.h>
+#include <brcmu_wifi.h>
 #include <phy_shim.h>
-#include <net/mac80211.h>	/* struct wiphy */
-#include "brcmu_wifi.h"		/* chanspec_t */
 
 #define	IDCODE_VER_MASK		0x0000000f
 #define	IDCODE_VER_SHIFT	0
@@ -105,7 +103,7 @@
 
 #define	WLC_RSSI_INVALID	 0	/* invalid RSSI value */
 
-typedef struct txpwr_limits {
+struct txpwr_limits {
 	u8 cck[WLC_NUM_RATES_CCK];
 	u8 ofdm[WLC_NUM_RATES_OFDM];
 
@@ -124,9 +122,9 @@ typedef struct txpwr_limits {
 	u8 mcs_40_stbc[WLC_NUM_RATES_MCS_1_STREAM];
 	u8 mcs_40_mimo[WLC_NUM_RATES_MCS_2_STREAM];
 	u8 mcs32;
-} txpwr_limits_t;
+};
 
-typedef struct {
+struct tx_power {
 	u32 flags;
 	chanspec_t chanspec;	/* txpwr report for this channel */
 	chanspec_t local_chanspec;	/* channel on which we are associated */
@@ -145,25 +143,18 @@ typedef struct {
 	u8 reg_limit[WL_TX_POWER_RATES];	/* Regulatory power limit */
 	u8 board_limit[WL_TX_POWER_RATES];	/* Max power board can support (SROM) */
 	u8 target[WL_TX_POWER_RATES];	/* Latest target power */
-} tx_power_t;
+};
 
-typedef struct tx_inst_power {
+struct tx_inst_power {
 	u8 txpwr_est_Pout[2];	/* Latest estimate for 2.4 and 5 Ghz */
 	u8 txpwr_est_Pout_gofdm;	/* Pwr estimate for 2.4 OFDM */
-} tx_inst_power_t;
+};
 
-typedef struct {
+struct chanvec {
 	u8 vec[MAXCHANNEL / NBBY];
-} chanvec_t;
+};
 
-struct rpc_info;
-typedef struct shared_phy shared_phy_t;
-
-struct phy_pub;
-
-typedef struct phy_pub wlc_phy_t;
-
-typedef struct shared_phy_params {
+struct shared_phy_params {
 	struct si_pub *sih;
 	void *physhim;
 	uint unit;
@@ -182,7 +173,7 @@ typedef struct shared_phy_params {
 	uint boardvendor;
 	u32 boardflags;
 	u32 boardflags2;
-} shared_phy_params_t;
+};
 
 
 extern shared_phy_t *wlc_phy_shared_attach(shared_phy_params_t *shp);

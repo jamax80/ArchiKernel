@@ -36,13 +36,12 @@
 #include <bcmdefs.h>
 #include <bcmutils.h>
 
-#include <dngl_stats.h>
-#include <dhd.h>
-#include <dhd_bus.h>
-#include <dhd_proto.h>
-#include <dhd_dbg.h>
-
-#include <wl_cfg80211.h>
+#include "dngl_stats.h"
+#include "dhd.h"
+#include "dhd_bus.h"
+#include "dhd_proto.h"
+#include "dhd_dbg.h"
+#include "wl_cfg80211.h"
 
 #define EPI_VERSION_STR		"4.218.248.5"
 #define ETH_P_BRCM			0x886c
@@ -340,7 +339,7 @@ int dhd_idletime = DHD_IDLETIME_TICKS;
 module_param(dhd_idletime, int, 0);
 
 /* Use polling */
-uint dhd_poll = false;
+uint dhd_poll;
 module_param(dhd_poll, uint, 0);
 
 /* Use cfg80211 */
@@ -1818,9 +1817,12 @@ dhd_add_if(dhd_info_t *dhd, int ifidx, void *handle, char *name,
 	ASSERT(dhd && (ifidx < DHD_MAX_IFS));
 
 	ifp = dhd->iflist[ifidx];
-	if (!ifp && !(ifp = kmalloc(sizeof(dhd_if_t), GFP_ATOMIC))) {
-		DHD_ERROR(("%s: OOM - dhd_if_t\n", __func__));
-		return -ENOMEM;
+	if (!ifp) {
+		ifp = kmalloc(sizeof(dhd_if_t), GFP_ATOMIC);
+		if (!ifp) {
+			DHD_ERROR(("%s: OOM - dhd_if_t\n", __func__));
+			return -ENOMEM;
+		}
 	}
 
 	memset(ifp, 0, sizeof(dhd_if_t));

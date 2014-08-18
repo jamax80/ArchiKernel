@@ -17,6 +17,8 @@
 #ifndef	_BRCM_AIUTILS_H_
 #define	_BRCM_AIUTILS_H_
 
+#include "types.h"
+
 /*
  * SOC Interconnect Address Map.
  * All regions may not exist on all chips.
@@ -448,16 +450,16 @@ typedef u32(*si_intrsoff_t) (void *intr_arg);
 typedef void (*si_intrsrestore_t) (void *intr_arg, u32 arg);
 typedef bool(*si_intrsenabled_t) (void *intr_arg);
 
-typedef struct gpioh_item {
+struct gpioh_item {
 	void *arg;
 	bool level;
 	gpio_handler_t handler;
 	u32 event;
 	struct gpioh_item *next;
-} gpioh_item_t;
+};
 
 /* misc si info needed by some of the routines */
-typedef struct si_info {
+struct si_info {
 	struct si_pub pub;	/* back plane public state (must be first) */
 	void *pbus;		/* handle to bus (pci/sdio/..) */
 	uint dev_coreid;	/* the core provides driver functions */
@@ -467,10 +469,6 @@ typedef struct si_info {
 	si_intrsenabled_t intrsenabled_fn; /* check if interrupts are enabled */
 
 	void *pch;		/* PCI/E core handle */
-
-	gpioh_item_t *gpioh_head;	/* GPIO event handlers list */
-
-	bool memseg;		/* flag to toggle MEM_SEG register */
 
 	char *vars;
 	uint varsz;
@@ -494,10 +492,10 @@ typedef struct si_info {
 	u32 cia[SI_MAXCORES];	/* erom cia entry for each core */
 	u32 cib[SI_MAXCORES];	/* erom cia entry for each core */
 	u32 oob_router;	/* oob router registers for axi */
-} si_info_t;
+};
 
 /* AMBA Interconnect exported externs */
-extern void ai_scan(struct si_pub *sih, void *regs, uint devid);
+extern void ai_scan(struct si_pub *sih, void *regs);
 
 extern uint ai_flag(struct si_pub *sih);
 extern void ai_setint(struct si_pub *sih, int siflag);
@@ -519,7 +517,7 @@ extern u32 ai_addrspacesize(struct si_pub *sih, uint asidx);
 extern void ai_write_wrap_reg(struct si_pub *sih, u32 offset, u32 val);
 
 /* === exported functions === */
-extern struct si_pub *ai_attach(uint pcidev, void *regs, uint bustype,
+extern struct si_pub *ai_attach(void *regs, uint bustype,
 		       void *sdh, char **vars, uint *varsz);
 
 extern void ai_detach(struct si_pub *sih);
