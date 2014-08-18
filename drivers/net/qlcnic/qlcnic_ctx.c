@@ -95,8 +95,8 @@ int qlcnic_fw_cmd_get_minidump_temp(struct qlcnic_adapter *adapter)
 			QLCNIC_CDRP_CMD_TEMP_SIZE);
 	if (err != QLCNIC_RCODE_SUCCESS) {
 		err = QLCRD32(adapter, QLCNIC_ARG1_CRB_OFFSET);
-		dev_err(&adapter->pdev->dev,
-			"Failed to get template size %d\n", err);
+		dev_info(&adapter->pdev->dev,
+			"Can't get template size %d\n", err);
 		err = -EIO;
 		return err;
 	}
@@ -150,6 +150,7 @@ int qlcnic_fw_cmd_get_minidump_temp(struct qlcnic_adapter *adapter)
 		tmpl_hdr->drv_cap_mask = tmpl_hdr->cap_mask;
 	else
 		tmpl_hdr->drv_cap_mask = QLCNIC_DUMP_MASK_DEF;
+	ahw->fw_dump.enable = 1;
 error:
 	dma_free_coherent(&adapter->pdev->dev, temp_size, tmp_addr, tmp_addr_t);
 	return err;
