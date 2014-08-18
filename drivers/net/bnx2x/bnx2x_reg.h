@@ -4783,6 +4783,12 @@
 #define UMAC_COMMAND_CONFIG_REG_SW_RESET			 (0x1<<13)
 #define UMAC_COMMAND_CONFIG_REG_TX_ENA				 (0x1<<0)
 #define UMAC_REG_COMMAND_CONFIG					 0x8
+/* [RW 32] Register Bit 0 refers to Bit 16 of the MAC address; Bit 1 refers
+ * to bit 17 of the MAC address etc. */
+#define UMAC_REG_MAC_ADDR0					 0xc
+/* [RW 16] Register Bit 0 refers to Bit 0 of the MAC address; Register Bit 1
+ * refers to Bit 1 of the MAC address etc. Bits 16 to 31 are reserved. */
+#define UMAC_REG_MAC_ADDR1					 0x10
 /* [RW 14] Defines a 14-Bit maximum frame length used by the MAC receive
  * logic to check frames. */
 #define UMAC_REG_MAXFR						 0x14
@@ -5312,6 +5318,12 @@
 #define XMAC_PFC_CTRL_HI_REG_TX_PFC_EN				 (0x1<<5)
 #define XMAC_REG_CLEAR_RX_LSS_STATUS				 0x60
 #define XMAC_REG_CTRL						 0
+/* [RW 16] Upper 48 bits of ctrl_sa register. Used as the SA in PAUSE/PFC
+ * packets transmitted by the MAC */
+#define XMAC_REG_CTRL_SA_HI					 0x2c
+/* [RW 32] Lower 48 bits of ctrl_sa register. Used as the SA in PAUSE/PFC
+ * packets transmitted by the MAC */
+#define XMAC_REG_CTRL_SA_LO					 0x28
 #define XMAC_REG_PAUSE_CTRL					 0x68
 #define XMAC_REG_PFC_CTRL					 0x70
 #define XMAC_REG_PFC_CTRL_HI					 0x74
@@ -6618,6 +6630,7 @@ Theotherbitsarereservedandshouldbezero*/
 #define MDIO_PMA_REG_CTRL		0x0
 #define MDIO_PMA_REG_STATUS		0x1
 #define MDIO_PMA_REG_10G_CTRL2		0x7
+#define MDIO_PMA_REG_TX_DISABLE		0x0009
 #define MDIO_PMA_REG_RX_SD		0xa
 /*bcm*/
 #define MDIO_PMA_REG_BCM_CTRL		0x0096
@@ -6791,6 +6804,8 @@ Theotherbitsarereservedandshouldbezero*/
 #define MDIO_84833_TOP_CFG_SCRATCH_REG2			0x4007
 #define MDIO_84833_TOP_CFG_SCRATCH_REG3			0x4008
 #define MDIO_84833_TOP_CFG_SCRATCH_REG4			0x4009
+#define MDIO_84833_TOP_CFG_DATA3_REG			0x4011
+#define MDIO_84833_TOP_CFG_DATA4_REG			0x4012
 
 /* Mailbox command set used by 84833. */
 #define PHY84833_DIAG_CMD_PAIR_SWAP_CHANGE		0x2
@@ -6804,6 +6819,11 @@ Theotherbitsarereservedandshouldbezero*/
 #define PHY84833_CMD_NOT_OPEN_FOR_CMDS			0x0040
 #define PHY84833_CMD_CLEAR_COMPLETE			0x0080
 #define PHY84833_CMD_OPEN_OVERRIDE			0xa5a5
+
+
+/* 84833 F/W Feature Commands */
+#define PHY84833_DIAG_CMD_GET_EEE_MODE			0x27
+#define PHY84833_DIAG_CMD_SET_EEE_MODE			0x28
 
 /* Warpcore clause 45 addressing */
 #define MDIO_WC_DEVAD					0x3
@@ -6889,6 +6909,7 @@ Theotherbitsarereservedandshouldbezero*/
 #define MDIO_WC_REG_DIGITAL5_MISC6			0x8345
 #define MDIO_WC_REG_DIGITAL5_MISC7			0x8349
 #define MDIO_WC_REG_DIGITAL5_ACTUAL_SPEED		0x834e
+#define MDIO_WC_REG_DIGITAL6_MP5_NEXTPAGECTRL		0x8350
 #define MDIO_WC_REG_CL49_USERB0_CTRL			0x8368
 #define MDIO_WC_REG_TX66_CONTROL			0x83b0
 #define MDIO_WC_REG_RX66_CONTROL			0x83c0
@@ -6919,7 +6940,15 @@ Theotherbitsarereservedandshouldbezero*/
 
 #define DIGITAL5_ACTUAL_SPEED_TX_MASK			0x003f
 
-/* 54616s */
+/* 54618se */
+#define MDIO_REG_GPHY_PHYID_LSB				0x3
+#define MDIO_REG_GPHY_ID_54618SE		0x5cd5
+#define MDIO_REG_GPHY_CL45_ADDR_REG			0xd
+#define MDIO_REG_GPHY_CL45_DATA_REG			0xe
+#define MDIO_REG_GPHY_EEE_ADV			0x3c
+#define MDIO_REG_GPHY_EEE_1G		(0x1 << 2)
+#define MDIO_REG_GPHY_EEE_100		(0x1 << 1)
+#define MDIO_REG_GPHY_EEE_RESOLVED		0x803e
 #define MDIO_REG_INTR_STATUS				0x1a
 #define MDIO_REG_INTR_MASK				0x1b
 #define MDIO_REG_INTR_MASK_LINK_STATUS			(0x1 << 1)
