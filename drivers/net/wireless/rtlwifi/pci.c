@@ -626,56 +626,6 @@ tx_status_ok:
 	}
 }
 
-static void _rtl_receive_one(struct ieee80211_hw *hw, struct sk_buff *skb,
-			     struct ieee80211_rx_status rx_status)
-{
-	struct rtl_priv *rtlpriv = rtl_priv(hw);
-	struct ieee80211_hdr *hdr = rtl_get_hdr(skb);
-	__le16 fc = rtl_get_fc(skb);
-	bool unicast = false;
-	struct sk_buff *uskb = NULL;
-	u8 *pdata;
-
-
-	memcpy(IEEE80211_SKB_RXCB(skb), &rx_status, sizeof(rx_status));
-
-	if (is_broadcast_ether_addr(hdr->addr1)) {
-		;/*TODO*/
-	} else if (is_multicast_ether_addr(hdr->addr1)) {
-		;/*TODO*/
-	} else {
-		unicast = true;
-		rtlpriv->stats.rxbytesunicast += skb->len;
-	}
-
-	rtl_is_special_data(hw, skb, false);
-
-	if (ieee80211_is_data(fc)) {
-		rtlpriv->cfg->ops->led_control(hw, LED_CTL_RX);
-
-		if (unicast)
-			rtlpriv->link_info.num_rx_inperiod++;
-	}
-
-	/* for sw lps */
-	rtl_swlps_beacon(hw, (void *)skb->data, skb->len);
-	rtl_recognize_peer(hw, (void *)skb->data, skb->len);
-	if ((rtlpriv->mac80211.opmode == NL80211_IFTYPE_AP) &&
-	    (rtlpriv->rtlhal.current_bandtype == BAND_ON_2_4G) &&
-	     (ieee80211_is_beacon(fc) || ieee80211_is_probe_resp(fc)))
-		return;
-
-	if (unlikely(!rtl_action_proc(hw, skb, false)))
-		return;
-
-	uskb = dev_alloc_skb(skb->len + 128);
-	memcpy(IEEE80211_SKB_RXCB(uskb), &rx_status, sizeof(rx_status));
-	pdata = (u8 *)skb_put(uskb, skb->len);
-	memcpy(pdata, skb->data, skb->len);
-
-	ieee80211_rx_irqsafe(hw, uskb);
-}
-
 static void _rtl_pci_rx_interrupt(struct ieee80211_hw *hw)
 {
 	struct rtl_priv *rtlpriv = rtl_priv(hw);
@@ -687,6 +637,7 @@ static void _rtl_pci_rx_interrupt(struct ieee80211_hw *hw)
 	u8 own;
 	u8 tmp_one;
 	u32 bufferaddress;
+	bool unicast = false;
 
 	struct rtl_stats stats = {
 		.signal = 0,
@@ -703,63 +654,128 @@ static void _rtl_pci_rx_interrupt(struct ieee80211_hw *hw)
 		/*rx pkt */
 		struct sk_buff *skb = rtlpci->rx_ring[rx_queue_idx].rx_buf[
 				index];
-		struct sk_buff *new_skb = NULL;
 
 		own = (u8) rtlpriv->cfg->ops->get_desc((u8 *) pdesc,
 						       false, HW_DESC_OWN);
 
-		/*wait data to be filled by hardware */
-		if (own)
+		if (own) {
+			/*wait data to be filled by hardware */
 			break;
+		} else {
+			struct ieee80211_hdr *hdr;
+			__le16 fc;
+			struct sk_buff *new_skb = NULL;
 
-		rtlpriv->cfg->ops->query_rx_desc(hw, &stats,
-						 &rx_status,
-						 (u8 *) pdesc, skb);
+			rtlpriv->cfg->ops->query_rx_desc(hw, &stats,
+							 &rx_status,
+							 (u8 *) pdesc, skb);
 
-		if (stats.crc || stats.hwerror)
-			goto done;
+			new_skb = dev_alloc_skb(rtlpci->rxbuffersize);
+			if (unlikely(!new_skb)) {
+				RT_TRACE(rtlpriv, (COMP_INTR | COMP_RECV),
+					 DBG_DMESG,
+					 ("can't alloc skb for rx\n"));
+				goto done;
+			}
 
-		new_skb = dev_alloc_skb(rtlpci->rxbuffersize);
-		if (unlikely(!new_skb)) {
-			RT_TRACE(rtlpriv, (COMP_INTR | COMP_RECV),
-				 DBG_DMESG,
-				 ("can't alloc skb for rx\n"));
-			goto done;
-		}
+			pci_unmap_single(rtlpci->pdev,
+					 *((dma_addr_t *) skb->cb),
+					 rtlpci->rxbuffersize,
+					 PCI_DMA_FROMDEVICE);
 
-		pci_unmap_single(rtlpci->pdev,
-				 *((dma_addr_t *) skb->cb),
-				 rtlpci->rxbuffersize,
-				 PCI_DMA_FROMDEVICE);
+			skb_put(skb, rtlpriv->cfg->ops->get_desc((u8 *) pdesc,
+							 false,
+							 HW_DESC_RXPKT_LEN));
+			skb_reserve(skb,
+				    stats.rx_drvinfo_size + stats.rx_bufshift);
 
-		skb_put(skb, rtlpriv->cfg->ops->get_desc((u8 *) pdesc, false,
-			HW_DESC_RXPKT_LEN));
-		skb_reserve(skb, stats.rx_drvinfo_size + stats.rx_bufshift);
+			/*
+			 *NOTICE This can not be use for mac80211,
+			 *this is done in mac80211 code,
+			 *if you done here sec DHCP will fail
+			 *skb_trim(skb, skb->len - 4);
+			 */
 
-		/*
-		 * NOTICE This can not be use for mac80211,
-		 * this is done in mac80211 code,
-		 * if you done here sec DHCP will fail
-		 * skb_trim(skb, skb->len - 4);
-		 */
+			hdr = rtl_get_hdr(skb);
+			fc = rtl_get_fc(skb);
 
-		_rtl_receive_one(hw, skb, rx_status);
+			if (!stats.crc && !stats.hwerror) {
+				memcpy(IEEE80211_SKB_RXCB(skb), &rx_status,
+				       sizeof(rx_status));
 
-		if (((rtlpriv->link_info.num_rx_inperiod +
-			rtlpriv->link_info.num_tx_inperiod) > 8) ||
-			(rtlpriv->link_info.num_rx_inperiod > 2)) {
-			tasklet_schedule(&rtlpriv->works.ips_leave_tasklet);
-		}
+				if (is_broadcast_ether_addr(hdr->addr1)) {
+					;/*TODO*/
+				} else if (is_multicast_ether_addr(hdr->addr1)) {
+					;/*TODO*/
+				} else {
+					unicast = true;
+					rtlpriv->stats.rxbytesunicast +=
+					    skb->len;
+				}
 
-		dev_kfree_skb_any(skb);
-		skb = new_skb;
+				rtl_is_special_data(hw, skb, false);
 
-		rtlpci->rx_ring[rx_queue_idx].rx_buf[index] = skb;
-		*((dma_addr_t *) skb->cb) =
+				if (ieee80211_is_data(fc)) {
+					rtlpriv->cfg->ops->led_control(hw,
+							       LED_CTL_RX);
+
+					if (unicast)
+						rtlpriv->link_info.
+						    num_rx_inperiod++;
+				}
+
+				/* for sw lps */
+				rtl_swlps_beacon(hw, (void *)skb->data,
+						 skb->len);
+				rtl_recognize_peer(hw, (void *)skb->data,
+						   skb->len);
+				if ((rtlpriv->mac80211.opmode ==
+				     NL80211_IFTYPE_AP) &&
+				    (rtlpriv->rtlhal.current_bandtype ==
+				     BAND_ON_2_4G) &&
+				     (ieee80211_is_beacon(fc) ||
+				     ieee80211_is_probe_resp(fc))) {
+					dev_kfree_skb_any(skb);
+				} else {
+					if (unlikely(!rtl_action_proc(hw, skb,
+					    false))) {
+						dev_kfree_skb_any(skb);
+					} else {
+						struct sk_buff *uskb = NULL;
+						u8 *pdata;
+						uskb = dev_alloc_skb(skb->len
+								     + 128);
+						memcpy(IEEE80211_SKB_RXCB(uskb),
+						       &rx_status,
+						       sizeof(rx_status));
+						pdata = (u8 *)skb_put(uskb,
+							skb->len);
+						memcpy(pdata, skb->data,
+						       skb->len);
+						dev_kfree_skb_any(skb);
+
+						ieee80211_rx_irqsafe(hw, uskb);
+					}
+				}
+			} else {
+				dev_kfree_skb_any(skb);
+			}
+
+			if (((rtlpriv->link_info.num_rx_inperiod +
+				rtlpriv->link_info.num_tx_inperiod) > 8) ||
+				(rtlpriv->link_info.num_rx_inperiod > 2)) {
+				tasklet_schedule(&rtlpriv->works.ips_leave_tasklet);
+			}
+
+			skb = new_skb;
+
+			rtlpci->rx_ring[rx_queue_idx].rx_buf[index] = skb;
+			*((dma_addr_t *) skb->cb) =
 			    pci_map_single(rtlpci->pdev, skb_tail_pointer(skb),
 					   rtlpci->rxbuffersize,
 					   PCI_DMA_FROMDEVICE);
 
+		}
 done:
 		bufferaddress = (*((dma_addr_t *)skb->cb));
 		tmp_one = 1;
