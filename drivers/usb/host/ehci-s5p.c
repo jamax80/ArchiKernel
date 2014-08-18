@@ -865,7 +865,7 @@ static struct platform_driver s5p_ehci_driver = {
 	.driver = {
 		.name	= "s5p-ehci",
 		.owner	= THIS_MODULE,
-		.pm = &s5p_ehci_pm_ops,
+		.pm	= &s5p_ehci_pm_ops,
 	}
 };
 
