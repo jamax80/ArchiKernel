@@ -278,7 +278,11 @@ obj-$(CONFIG_NAPLES_COMMON)		+= naples-gpio.o sec-common.o \
 					   naples-camera.o midas-thermistor.o \
 					   midas-mhl.o
 
-obj-$(CONFIG_NFC_DEVICES)			+= midas-nfc.o
+ifdef CONFIG_ARCHIKERNEL_UPSTREAM_HACKS
+obj-$(CONFIG_PN65N_NFC)			+= midas-nfc.o
+else
+obj-$(CONFIG_NFC)			+= midas-nfc.o
+endif
 
 ifeq ($(CONFIG_MACH_GRANDE),y)
 obj-$(CONFIG_MACH_MIDAS)		+= sec-reboot.o board-grande-sensor.o

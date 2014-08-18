@@ -2,15 +2,6 @@
 # Near Field Communication (NFC) devices
 #
 
-menu "Near Field Communication (NFC) devices"
-	depends on NFC
-
-config SF2_NFC_TAG
-	bool "NFC TAG driver"
-	default n
-	help
-	NFC TAG Interrput detecting driver
-
 config PN65N_NFC
     tristate "PN65N NFC driver"
 	depends on I2C
@@ -22,6 +13,15 @@ config PN65N_NFC
 
 	  To compile this driver as a module, choose m here. The module will
 	  be called pn65n.
+
+menu "Near Field Communication (NFC) devices"
+	depends on NFC
+
+config SF2_NFC_TAG
+	bool "NFC TAG driver"
+	default n
+	help
+	NFC TAG Interrput detecting driver
 
 config PN547_NFC
     tristate "PN547 NFC driver"
