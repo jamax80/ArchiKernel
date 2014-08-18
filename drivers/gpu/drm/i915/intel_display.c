@@ -1158,12 +1158,15 @@ static void intel_enable_transcoder(struct drm_i915_private *dev_priv,
 
 	reg = TRANSCONF(pipe);
 	val = I915_READ(reg);
-	/*
-	 * make the BPC in transcoder be consistent with
-	 * that in pipeconf reg.
-	 */
-	val &= ~PIPE_BPC_MASK;
-	val |= I915_READ(PIPECONF(pipe)) & PIPE_BPC_MASK;
+
+	if (HAS_PCH_IBX(dev_priv->dev)) {
+		/*
+		 * make the BPC in transcoder be consistent with
+		 * that in pipeconf reg.
+		 */
+		val &= ~PIPE_BPC_MASK;
+		val |= I915_READ(PIPECONF(pipe)) & PIPE_BPC_MASK;
+	}
 	I915_WRITE(reg, val | TRANS_ENABLE);
 	if (wait_for(I915_READ(reg) & TRANS_STATE_ENABLE, 100))
 		DRM_ERROR("failed to enable transcoder %d\n", pipe);
@@ -1838,10 +1841,8 @@ err_interruptible:
 	return ret;
 }
 
-/* Assume fb object is pinned & idle & fenced and just update base pointers */
-static int
-intel_pipe_set_base_atomic(struct drm_crtc *crtc, struct drm_framebuffer *fb,
-			   int x, int y, enum mode_set_atomic state)
+static int i9xx_update_plane(struct drm_crtc *crtc, struct drm_framebuffer *fb,
+			     int x, int y)
 {
 	struct drm_device *dev = crtc->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
@@ -1884,7 +1885,7 @@ intel_pipe_set_base_atomic(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 		dspcntr |= DISPPLANE_32BPP_NO_ALPHA;
 		break;
 	default:
-		DRM_ERROR("Unknown color depth\n");
+		DRM_ERROR("Unknown color depth %d\n", fb->bits_per_pixel);
 		return -EINVAL;
 	}
 	if (INTEL_INFO(dev)->gen >= 4) {
@@ -1893,10 +1894,6 @@ intel_pipe_set_base_atomic(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 		else
 			dspcntr &= ~DISPPLANE_TILED;
 	}
-
-	if (HAS_PCH_SPLIT(dev))
-		/* must disable */
-		dspcntr |= DISPPLANE_TRICKLE_FEED_DISABLE;
 
 	I915_WRITE(reg, dspcntr);
 
@@ -1913,6 +1910,99 @@ intel_pipe_set_base_atomic(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 	} else
 		I915_WRITE(DSPADDR(plane), Start + Offset);
 	POSTING_READ(reg);
+
+	return 0;
+}
+
+static int ironlake_update_plane(struct drm_crtc *crtc,
+				 struct drm_framebuffer *fb, int x, int y)
+{
+	struct drm_device *dev = crtc->dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
+	struct intel_framebuffer *intel_fb;
+	struct drm_i915_gem_object *obj;
+	int plane = intel_crtc->plane;
+	unsigned long Start, Offset;
+	u32 dspcntr;
+	u32 reg;
+
+	switch (plane) {
+	case 0:
+	case 1:
+		break;
+	default:
+		DRM_ERROR("Can't update plane %d in SAREA\n", plane);
+		return -EINVAL;
+	}
+
+	intel_fb = to_intel_framebuffer(fb);
+	obj = intel_fb->obj;
+
+	reg = DSPCNTR(plane);
+	dspcntr = I915_READ(reg);
+	/* Mask out pixel format bits in case we change it */
+	dspcntr &= ~DISPPLANE_PIXFORMAT_MASK;
+	switch (fb->bits_per_pixel) {
+	case 8:
+		dspcntr |= DISPPLANE_8BPP;
+		break;
+	case 16:
+		if (fb->depth != 16)
+			return -EINVAL;
+
+		dspcntr |= DISPPLANE_16BPP;
+		break;
+	case 24:
+	case 32:
+		if (fb->depth == 24)
+			dspcntr |= DISPPLANE_32BPP_NO_ALPHA;
+		else if (fb->depth == 30)
+			dspcntr |= DISPPLANE_32BPP_30BIT_NO_ALPHA;
+		else
+			return -EINVAL;
+		break;
+	default:
+		DRM_ERROR("Unknown color depth %d\n", fb->bits_per_pixel);
+		return -EINVAL;
+	}
+
+	if (obj->tiling_mode != I915_TILING_NONE)
+		dspcntr |= DISPPLANE_TILED;
+	else
+		dspcntr &= ~DISPPLANE_TILED;
+
+	/* must disable */
+	dspcntr |= DISPPLANE_TRICKLE_FEED_DISABLE;
+
+	I915_WRITE(reg, dspcntr);
+
+	Start = obj->gtt_offset;
+	Offset = y * fb->pitch + x * (fb->bits_per_pixel / 8);
+
+	DRM_DEBUG_KMS("Writing base %08lX %08lX %d %d %d\n",
+		      Start, Offset, x, y, fb->pitch);
+	I915_WRITE(DSPSTRIDE(plane), fb->pitch);
+	I915_WRITE(DSPSURF(plane), Start);
+	I915_WRITE(DSPTILEOFF(plane), (y << 16) | x);
+	I915_WRITE(DSPADDR(plane), Offset);
+	POSTING_READ(reg);
+
+	return 0;
+}
+
+/* Assume fb object is pinned & idle & fenced and just update base pointers */
+static int
+intel_pipe_set_base_atomic(struct drm_crtc *crtc, struct drm_framebuffer *fb,
+			   int x, int y, enum mode_set_atomic state)
+{
+	struct drm_device *dev = crtc->dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	int ret;
+
+	ret = dev_priv->display.update_plane(crtc, fb, x, y);
+	if (ret)
+		return ret;
 
 	intel_update_fbc(dev);
 	intel_increase_pllclock(crtc);
@@ -2619,6 +2709,7 @@ static void ironlake_pch_enable(struct drm_crtc *crtc)
 	/* For PCH DP, enable TRANS_DP_CTL */
 	if (HAS_PCH_CPT(dev) &&
 	    intel_pipe_has_type(crtc, INTEL_OUTPUT_DISPLAYPORT)) {
+		u32 bpc = (I915_READ(PIPECONF(pipe)) & PIPE_BPC_MASK) >> 5;
 		reg = TRANS_DP_CTL(pipe);
 		temp = I915_READ(reg);
 		temp &= ~(TRANS_DP_PORT_SEL_MASK |
@@ -2626,7 +2717,7 @@ static void ironlake_pch_enable(struct drm_crtc *crtc)
 			  TRANS_DP_BPC_MASK);
 		temp |= (TRANS_DP_OUTPUT_ENABLE |
 			 TRANS_DP_ENH_FRAMING);
-		temp |= TRANS_DP_8BPC;
+		temp |= bpc << 9; /* same format but at 11:9 */
 
 		if (crtc->mode.flags & DRM_MODE_FLAG_PHSYNC)
 			temp |= TRANS_DP_HSYNC_ACTIVE_HIGH;
@@ -4305,6 +4396,133 @@ static inline bool intel_panel_use_ssc(struct drm_i915_private *dev_priv)
 	return dev_priv->lvds_use_ssc && i915_panel_use_ssc;
 }
 
+/**
+ * intel_choose_pipe_bpp_dither - figure out what color depth the pipe should send
+ * @crtc: CRTC structure
+ *
+ * A pipe may be connected to one or more outputs.  Based on the depth of the
+ * attached framebuffer, choose a good color depth to use on the pipe.
+ *
+ * If possible, match the pipe depth to the fb depth.  In some cases, this
+ * isn't ideal, because the connected output supports a lesser or restricted
+ * set of depths.  Resolve that here:
+ *    LVDS typically supports only 6bpc, so clamp down in that case
+ *    HDMI supports only 8bpc or 12bpc, so clamp to 8bpc with dither for 10bpc
+ *    Displays may support a restricted set as well, check EDID and clamp as
+ *      appropriate.
+ *
+ * RETURNS:
+ * Dithering requirement (i.e. false if display bpc and pipe bpc match,
+ * true if they don't match).
+ */
+static bool intel_choose_pipe_bpp_dither(struct drm_crtc *crtc,
+					 unsigned int *pipe_bpp)
+{
+	struct drm_device *dev = crtc->dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct drm_encoder *encoder;
+	struct drm_connector *connector;
+	unsigned int display_bpc = UINT_MAX, bpc;
+
+	/* Walk the encoders & connectors on this crtc, get min bpc */
+	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
+		struct intel_encoder *intel_encoder = to_intel_encoder(encoder);
+
+		if (encoder->crtc != crtc)
+			continue;
+
+		if (intel_encoder->type == INTEL_OUTPUT_LVDS) {
+			unsigned int lvds_bpc;
+
+			if ((I915_READ(PCH_LVDS) & LVDS_A3_POWER_MASK) ==
+			    LVDS_A3_POWER_UP)
+				lvds_bpc = 8;
+			else
+				lvds_bpc = 6;
+
+			if (lvds_bpc < display_bpc) {
+				DRM_DEBUG_DRIVER("clamping display bpc (was %d) to LVDS (%d)\n", display_bpc, lvds_bpc);
+				display_bpc = lvds_bpc;
+			}
+			continue;
+		}
+
+		if (intel_encoder->type == INTEL_OUTPUT_EDP) {
+			/* Use VBT settings if we have an eDP panel */
+			unsigned int edp_bpc = dev_priv->edp.bpp / 3;
+
+			if (edp_bpc < display_bpc) {
+				DRM_DEBUG_DRIVER("clamping display bpc (was %d) to eDP (%d)\n", display_bpc, edp_bpc);
+				display_bpc = edp_bpc;
+			}
+			continue;
+		}
+
+		/* Not one of the known troublemakers, check the EDID */
+		list_for_each_entry(connector, &dev->mode_config.connector_list,
+				    head) {
+			if (connector->encoder != encoder)
+				continue;
+
+			if (connector->display_info.bpc < display_bpc) {
+				DRM_DEBUG_DRIVER("clamping display bpc (was %d) to EDID reported max of %d\n", display_bpc, connector->display_info.bpc);
+				display_bpc = connector->display_info.bpc;
+			}
+		}
+
+		/*
+		 * HDMI is either 12 or 8, so if the display lets 10bpc sneak
+		 * through, clamp it down.  (Note: >12bpc will be caught below.)
+		 */
+		if (intel_encoder->type == INTEL_OUTPUT_HDMI) {
+			if (display_bpc > 8 && display_bpc < 12) {
+				DRM_DEBUG_DRIVER("forcing bpc to 12 for HDMI\n");
+				display_bpc = 12;
+			} else {
+				DRM_DEBUG_DRIVER("forcing bpc to 8 for HDMI\n");
+				display_bpc = 8;
+			}
+		}
+	}
+
+	/*
+	 * We could just drive the pipe at the highest bpc all the time and
+	 * enable dithering as needed, but that costs bandwidth.  So choose
+	 * the minimum value that expresses the full color range of the fb but
+	 * also stays within the max display bpc discovered above.
+	 */
+
+	switch (crtc->fb->depth) {
+	case 8:
+		bpc = 8; /* since we go through a colormap */
+		break;
+	case 15:
+	case 16:
+		bpc = 6; /* min is 18bpp */
+		break;
+	case 24:
+		bpc = min((unsigned int)8, display_bpc);
+		break;
+	case 30:
+		bpc = min((unsigned int)10, display_bpc);
+		break;
+	case 48:
+		bpc = min((unsigned int)12, display_bpc);
+		break;
+	default:
+		DRM_DEBUG("unsupported depth, assuming 24 bits\n");
+		bpc = min((unsigned int)8, display_bpc);
+		break;
+	}
+
+	DRM_DEBUG_DRIVER("setting pipe bpc to %d (max display bpc %d)\n",
+			 bpc, display_bpc);
+
+	*pipe_bpp = bpc * 3;
+
+	return display_bpc != bpc;
+}
+
 static int i9xx_crtc_mode_set(struct drm_crtc *crtc,
 			      struct drm_display_mode *mode,
 			      struct drm_display_mode *adjusted_mode,
@@ -4717,7 +4935,9 @@ static int ironlake_crtc_mode_set(struct drm_crtc *crtc,
 	struct fdi_m_n m_n = {0};
 	u32 temp;
 	u32 lvds_sync = 0;
-	int target_clock, pixel_multiplier, lane, link_bw, bpp, factor;
+	int target_clock, pixel_multiplier, lane, link_bw, factor;
+	unsigned int pipe_bpp;
+	bool dither;
 
 	list_for_each_entry(encoder, &mode_config->encoder_list, base.head) {
 		if (encoder->base.crtc != crtc)
@@ -4844,48 +5064,29 @@ static int ironlake_crtc_mode_set(struct drm_crtc *crtc,
 	/* determine panel color depth */
 	temp = I915_READ(PIPECONF(pipe));
 	temp &= ~PIPE_BPC_MASK;
-	if (is_lvds) {
-		/* the BPC will be 6 if it is 18-bit LVDS panel */
-		if ((I915_READ(PCH_LVDS) & LVDS_A3_POWER_MASK) == LVDS_A3_POWER_UP)
-			temp |= PIPE_8BPC;
-		else
-			temp |= PIPE_6BPC;
-	} else if (has_edp_encoder) {
-		switch (dev_priv->edp.bpp/3) {
-		case 8:
-			temp |= PIPE_8BPC;
-			break;
-		case 10:
-			temp |= PIPE_10BPC;
-			break;
-		case 6:
-			temp |= PIPE_6BPC;
-			break;
-		case 12:
-			temp |= PIPE_12BPC;
-			break;
-		}
-	} else
+	dither = intel_choose_pipe_bpp_dither(crtc, &pipe_bpp);
+	switch (pipe_bpp) {
+	case 18:
+		temp |= PIPE_6BPC;
+		break;
+	case 24:
 		temp |= PIPE_8BPC;
-	I915_WRITE(PIPECONF(pipe), temp);
-
-	switch (temp & PIPE_BPC_MASK) {
-	case PIPE_8BPC:
-		bpp = 24;
 		break;
-	case PIPE_10BPC:
-		bpp = 30;
+	case 30:
+		temp |= PIPE_10BPC;
 		break;
-	case PIPE_6BPC:
-		bpp = 18;
-		break;
-	case PIPE_12BPC:
-		bpp = 36;
+	case 36:
+		temp |= PIPE_12BPC;
 		break;
 	default:
-		DRM_ERROR("unknown pipe bpc value\n");
-		bpp = 24;
+		WARN(1, "intel_choose_pipe_bpp returned invalid value\n");
+		temp |= PIPE_8BPC;
+		pipe_bpp = 24;
+		break;
 	}
+
+	intel_crtc->bpp = pipe_bpp;
+	I915_WRITE(PIPECONF(pipe), temp);
 
 	if (!lane) {
 		/*
@@ -4893,7 +5094,7 @@ static int ironlake_crtc_mode_set(struct drm_crtc *crtc,
 		 * oversubscribing the link. Max center spread
 		 * is 2.5%; use 5% for safety's sake.
 		 */
-		u32 bps = target_clock * bpp * 21 / 20;
+		u32 bps = target_clock * intel_crtc->bpp * 21 / 20;
 		lane = bps / (link_bw * 8) + 1;
 	}
 
@@ -4901,7 +5102,8 @@ static int ironlake_crtc_mode_set(struct drm_crtc *crtc,
 
 	if (pixel_multiplier > 1)
 		link_bw *= pixel_multiplier;
-	ironlake_compute_m_n(bpp, lane, target_clock, link_bw, &m_n);
+	ironlake_compute_m_n(intel_crtc->bpp, lane, target_clock, link_bw,
+			     &m_n);
 
 	/* Ironlake: try to setup display ref clock before DPLL
 	 * enabling. This is only under driver's control after
@@ -5104,14 +5306,12 @@ static int ironlake_crtc_mode_set(struct drm_crtc *crtc,
 		I915_WRITE(PCH_LVDS, temp);
 	}
 
-	/* set the dithering flag and clear for anything other than a panel. */
 	pipeconf &= ~PIPECONF_DITHER_EN;
 	pipeconf &= ~PIPECONF_DITHER_TYPE_MASK;
-	if (dev_priv->lvds_dither && (is_lvds || has_edp_encoder)) {
+	if ((is_lvds && dev_priv->lvds_dither) || dither) {
 		pipeconf |= PIPECONF_DITHER_EN;
 		pipeconf |= PIPECONF_DITHER_TYPE_ST1;
 	}
-
 	if (is_dp || intel_encoder_is_pch_edp(&has_edp_encoder->base)) {
 		intel_dp_set_m_n(crtc, mode, adjusted_mode);
 	} else {
@@ -6634,6 +6834,7 @@ static void intel_crtc_init(struct drm_device *dev, int pipe)
 
 	intel_crtc_reset(&intel_crtc->base);
 	intel_crtc->active = true; /* force the pipe off on setup_init_config */
+	intel_crtc->bpp = 24; /* default for pre-Ironlake */
 
 	if (HAS_PCH_SPLIT(dev)) {
 		intel_helper_funcs.prepare = ironlake_crtc_prepare;
@@ -6860,6 +7061,11 @@ int intel_framebuffer_init(struct drm_device *dev,
 	switch (mode_cmd->bpp) {
 	case 8:
 	case 16:
+		/* Only pre-ILK can handle 5:5:5 */
+		if (mode_cmd->depth == 15 && !HAS_PCH_SPLIT(dev))
+			return -EINVAL;
+		break;
+
 	case 24:
 	case 32:
 		break;
@@ -7683,9 +7889,11 @@ static void intel_init_display(struct drm_device *dev)
 	if (HAS_PCH_SPLIT(dev)) {
 		dev_priv->display.dpms = ironlake_crtc_dpms;
 		dev_priv->display.crtc_mode_set = ironlake_crtc_mode_set;
+		dev_priv->display.update_plane = ironlake_update_plane;
 	} else {
 		dev_priv->display.dpms = i9xx_crtc_dpms;
 		dev_priv->display.crtc_mode_set = i9xx_crtc_mode_set;
+		dev_priv->display.update_plane = i9xx_update_plane;
 	}
 
 	if (I915_HAS_FBC(dev)) {
