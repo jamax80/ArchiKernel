@@ -144,8 +144,6 @@ obj-$(CONFIG_EXTCON)		+= extcon/
 obj-$(CONFIG_MOBICORE_SUPPORT)	+= gud/
 obj-$(CONFIG_MOBICORE_DRIVER)	+= gud20/
 
-obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
-
 obj-$(CONFIG_FELICA) += felica/
 
 obj-$(CONFIG_AUTHENTEC_VPNCLIENT_INTERCEPTOR) += interceptor/
@@ -153,4 +151,4 @@ obj-$(CONFIG_AUTHENTEC_VPNCLIENT_INTERCEPTOR) += interceptor/
 obj-$(CONFIG_ICE4_FPGA)		+= ice4_fpga/
 
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
-obj-$(CONFIG_NFC)		+= nfc/
+obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
