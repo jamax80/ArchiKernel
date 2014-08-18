@@ -32,7 +32,11 @@
  * - watchdog timer around ctx operations
  */
 
+<<<<<<< HEAD
 .section #nvc0_grgpc_data
+=======
+.section nvc0_grgpc_data
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 include(`nvc0_graph.fuc')
 gpc_id:			.b32 0
 gpc_mmio_list_head:	.b32 0
@@ -48,6 +52,7 @@ cmd_queue:		queue_init
 // chipset descriptions
 chipsets:
 .b8  0xc0 0 0 0
+<<<<<<< HEAD
 .b16 #nvc0_gpc_mmio_head
 .b16 #nvc0_gpc_mmio_tail
 .b16 #nvc0_tpc_mmio_head
@@ -87,6 +92,37 @@ chipsets:
 .b16 #nvd9_gpc_mmio_tail
 .b16 #nvd9_tpc_mmio_head
 .b16 #nvd9_tpc_mmio_tail
+=======
+.b16 nvc0_gpc_mmio_head
+.b16 nvc0_gpc_mmio_tail
+.b16 nvc0_tpc_mmio_head
+.b16 nvc0_tpc_mmio_tail
+.b8  0xc1 0 0 0
+.b16 nvc0_gpc_mmio_head
+.b16 nvc1_gpc_mmio_tail
+.b16 nvc0_tpc_mmio_head
+.b16 nvc1_tpc_mmio_tail
+.b8  0xc3 0 0 0
+.b16 nvc0_gpc_mmio_head
+.b16 nvc0_gpc_mmio_tail
+.b16 nvc0_tpc_mmio_head
+.b16 nvc3_tpc_mmio_tail
+.b8  0xc4 0 0 0
+.b16 nvc0_gpc_mmio_head
+.b16 nvc0_gpc_mmio_tail
+.b16 nvc0_tpc_mmio_head
+.b16 nvc3_tpc_mmio_tail
+.b8  0xc8 0 0 0
+.b16 nvc0_gpc_mmio_head
+.b16 nvc0_gpc_mmio_tail
+.b16 nvc0_tpc_mmio_head
+.b16 nvc0_tpc_mmio_tail
+.b8  0xce 0 0 0
+.b16 nvc0_gpc_mmio_head
+.b16 nvc0_gpc_mmio_tail
+.b16 nvc0_tpc_mmio_head
+.b16 nvc3_tpc_mmio_tail
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 .b8  0 0 0 0
 
 // GPC mmio lists
@@ -119,6 +155,7 @@ nvc0_gpc_mmio_tail:
 mmctx_data(0x000c6c, 1);
 nvc1_gpc_mmio_tail:
 
+<<<<<<< HEAD
 nvd9_gpc_mmio_head:
 mmctx_data(0x000380, 1)
 mmctx_data(0x000400, 2)
@@ -148,6 +185,8 @@ mmctx_data(0x001000, 3)
 mmctx_data(0x001014, 1)
 nvd9_gpc_mmio_tail:
 
+=======
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 // TPC mmio lists
 nvc0_tpc_mmio_head:
 mmctx_data(0x000018, 1)
@@ -173,13 +212,19 @@ mmctx_data(0x000750, 2)
 nvc0_tpc_mmio_tail:
 mmctx_data(0x000758, 1)
 mmctx_data(0x0002c4, 1)
+<<<<<<< HEAD
 mmctx_data(0x0006e0, 1)
 nvcf_tpc_mmio_tail:
 mmctx_data(0x0004bc, 1)
+=======
+mmctx_data(0x0004bc, 1)
+mmctx_data(0x0006e0, 1)
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 nvc3_tpc_mmio_tail:
 mmctx_data(0x000544, 1)
 nvc1_tpc_mmio_tail:
 
+<<<<<<< HEAD
 nvd9_tpc_mmio_head:
 mmctx_data(0x000018, 1)
 mmctx_data(0x00003c, 1)
@@ -208,6 +253,11 @@ nvd9_tpc_mmio_tail:
 
 .section #nvc0_grgpc_code
 bra #init
+=======
+
+.section nvc0_grgpc_code
+bra init
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 define(`include_code')
 include(`nvc0_graph.fuc')
 
@@ -219,10 +269,17 @@ error:
 	push $r14
 	mov $r14 -0x67ec 	// 0x9814
 	sethi $r14 0x400000
+<<<<<<< HEAD
 	call #nv_wr32		// HUB_CTXCTL_CC_SCRATCH[5] = error code
 	add b32 $r14 0x41c
 	mov $r15 1
 	call #nv_wr32		// HUB_CTXCTL_INTR_UP_SET
+=======
+	call nv_wr32		// HUB_CTXCTL_CC_SCRATCH[5] = error code
+	add b32 $r14 0x41c
+	mov $r15 1
+	call nv_wr32		// HUB_CTXCTL_INTR_UP_SET
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	pop $r14
 	ret
 
@@ -249,7 +306,11 @@ init:
 	iowr I[$r1 + 0x000] $r2		// FIFO_ENABLE
 
 	// setup i0 handler, and route all interrupts to it
+<<<<<<< HEAD
 	mov $r1 #ih
+=======
+	mov $r1 ih
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	mov $iv0 $r1
 	mov $r1 0x400
 	iowr I[$r1 + 0x300] $r0		// INTR_DISPATCH
@@ -269,24 +330,42 @@ init:
 	and $r2 0x1f
 	shl b32 $r3 $r2
 	sub b32 $r3 1
+<<<<<<< HEAD
 	st b32 D[$r0 + #tpc_count] $r2
 	st b32 D[$r0 + #tpc_mask] $r3
 	add b32 $r1 0x400
 	iord $r2 I[$r1 + 0x000]		// MYINDEX
 	st b32 D[$r0 + #gpc_id] $r2
+=======
+	st b32 D[$r0 + tpc_count] $r2
+	st b32 D[$r0 + tpc_mask] $r3
+	add b32 $r1 0x400
+	iord $r2 I[$r1 + 0x000]		// MYINDEX
+	st b32 D[$r0 + gpc_id] $r2
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 
 	// find context data for this chipset
 	mov $r2 0x800
 	shl b32 $r2 6
 	iord $r2 I[$r2 + 0x000]		// CC_SCRATCH[0]
+<<<<<<< HEAD
 	mov $r1 #chipsets - 12
+=======
+	mov $r1 chipsets - 12
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	init_find_chipset:
 		add b32 $r1 12
 		ld b32 $r3 D[$r1 + 0x00]
 		cmpu b32 $r3 $r2
+<<<<<<< HEAD
 		bra e #init_context
 		cmpu b32 $r3 0
 		bra ne #init_find_chipset
+=======
+		bra e init_context
+		cmpu b32 $r3 0
+		bra ne init_find_chipset
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 		// unknown chipset
 		ret
 
@@ -312,19 +391,32 @@ init:
 	clear b32 $r15
 	ld b16 $r14 D[$r1 + 4]
 	ld b16 $r15 D[$r1 + 6]
+<<<<<<< HEAD
 	st b16 D[$r0 + #gpc_mmio_list_head] $r14
 	st b16 D[$r0 + #gpc_mmio_list_tail] $r15
 	call #mmctx_size
+=======
+	st b16 D[$r0 + gpc_mmio_list_head] $r14
+	st b16 D[$r0 + gpc_mmio_list_tail] $r15
+	call mmctx_size
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	add b32 $r2 $r15
 	add b32 $r3 $r15
 
 	// calculate per-TPC mmio context size, store the list pointers
 	ld b16 $r14 D[$r1 + 8]
 	ld b16 $r15 D[$r1 + 10]
+<<<<<<< HEAD
 	st b16 D[$r0 + #tpc_mmio_list_head] $r14
 	st b16 D[$r0 + #tpc_mmio_list_tail] $r15
 	call #mmctx_size
 	ld b32 $r14 D[$r0 + #tpc_count]
+=======
+	st b16 D[$r0 + tpc_mmio_list_head] $r14
+	st b16 D[$r0 + tpc_mmio_list_tail] $r15
+	call mmctx_size
+	ld b32 $r14 D[$r0 + tpc_count]
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	mulu $r14 $r15
 	add b32 $r2 $r14
 	add b32 $r3 $r14
@@ -342,7 +434,11 @@ init:
 
 	// calculate size of strand context data
 	mov b32 $r15 $r2
+<<<<<<< HEAD
 	call #strand_ctx_init
+=======
+	call strand_ctx_init
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	add b32 $r3 $r15
 
 	// save context size, and tell HUB we're done
@@ -360,6 +456,7 @@ init:
 main:
 	bset $flags $p0
 	sleep $p0
+<<<<<<< HEAD
 	mov $r13 #cmd_queue
 	call #queue_get
 	bra $p1 #main
@@ -367,6 +464,15 @@ main:
 	// 0x0000-0x0003 are all context transfers
 	cmpu b32 $r14 0x04
 	bra nc #main_not_ctx_xfer
+=======
+	mov $r13 cmd_queue
+	call queue_get
+	bra $p1 main
+
+	// 0x0000-0x0003 are all context transfers
+	cmpu b32 $r14 0x04
+	bra nc main_not_ctx_xfer
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 		// fetch $flags and mask off $p1/$p2
 		mov $r1 $flags
 		mov $r2 0x0006
@@ -377,14 +483,24 @@ main:
 		or $r1 $r14
 		mov $flags $r1
 		// transfer context data
+<<<<<<< HEAD
 		call #ctx_xfer
 		bra #main
+=======
+		call ctx_xfer
+		bra main
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 
 	main_not_ctx_xfer:
 	shl b32 $r15 $r14 16
 	or $r15 E_BAD_COMMAND
+<<<<<<< HEAD
 	call #error
 	bra #main
+=======
+	call error
+	bra main
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 
 // interrupt handler
 ih:
@@ -401,6 +517,7 @@ ih:
 	// incoming fifo command?
 	iord $r10 I[$r0 + 0x200]	// INTR
 	and $r11 $r10 0x00000004
+<<<<<<< HEAD
 	bra e #ih_no_fifo
 		// queue incoming fifo command for later processing
 		mov $r11 0x1900
@@ -408,6 +525,15 @@ ih:
 		iord $r14 I[$r11 + 0x100]	// FIFO_CMD
 		iord $r15 I[$r11 + 0x000]	// FIFO_DATA
 		call #queue_put
+=======
+	bra e ih_no_fifo
+		// queue incoming fifo command for later processing
+		mov $r11 0x1900
+		mov $r13 cmd_queue
+		iord $r14 I[$r11 + 0x100]	// FIFO_CMD
+		iord $r15 I[$r11 + 0x000]	// FIFO_DATA
+		call queue_put
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 		add b32 $r11 0x400
 		mov $r14 1
 		iowr I[$r11 + 0x000] $r14	// FIFO_ACK
@@ -433,11 +559,19 @@ ih:
 //
 hub_barrier_done:
 	mov $r15 1
+<<<<<<< HEAD
 	ld b32 $r14 D[$r0 + #gpc_id]
 	shl b32 $r15 $r14
 	mov $r14 -0x6be8 	// 0x409418 - HUB_BAR_SET
 	sethi $r14 0x400000
 	call #nv_wr32
+=======
+	ld b32 $r14 D[$r0 + gpc_id]
+	shl b32 $r15 $r14
+	mov $r14 -0x6be8 	// 0x409418 - HUB_BAR_SET
+	sethi $r14 0x400000
+	call nv_wr32
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	ret
 
 // Disables various things, waits a bit, and re-enables them..
@@ -454,7 +588,11 @@ ctx_redswitch:
 	mov $r15 8
 	ctx_redswitch_delay:
 		sub b32 $r15 1
+<<<<<<< HEAD
 		bra ne #ctx_redswitch_delay
+=======
+		bra ne ctx_redswitch_delay
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	mov $r15 0xa20
 	iowr I[$r14] $r15	// GPC_RED_SWITCH = UNK11, ENABLE, POWER
 	ret
@@ -472,8 +610,13 @@ ctx_xfer:
 	mov $r1 0xa04
 	shl b32 $r1 6
 	iowr I[$r1 + 0x000] $r15// MEM_BASE
+<<<<<<< HEAD
 	bra not $p1 #ctx_xfer_not_load
 		call #ctx_redswitch
+=======
+	bra not $p1 ctx_xfer_not_load
+		call ctx_redswitch
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	ctx_xfer_not_load:
 
 	// strands
@@ -481,7 +624,11 @@ ctx_xfer:
 	sethi $r1 0x20000
 	mov $r2 0xc
 	iowr I[$r1] $r2		// STRAND_CMD(0x3f) = 0x0c
+<<<<<<< HEAD
 	call #strand_wait
+=======
+	call strand_wait
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	mov $r2 0x47fc
 	sethi $r2 0x20000
 	iowr I[$r2] $r0		// STRAND_FIRST_GENE(0x3f) = 0x00
@@ -494,6 +641,7 @@ ctx_xfer:
 	or $r10 2		// first
 	mov $r11 0x0000
 	sethi $r11 0x500000
+<<<<<<< HEAD
 	ld b32 $r12 D[$r0 + #gpc_id]
 	shl b32 $r12 15
 	add b32 $r11 $r12	// base = NV_PGRAPH_GPCn
@@ -501,12 +649,22 @@ ctx_xfer:
 	ld b32 $r13 D[$r0 + #gpc_mmio_list_tail]
 	mov $r14 0		// not multi
 	call #mmctx_xfer
+=======
+	ld b32 $r12 D[$r0 + gpc_id]
+	shl b32 $r12 15
+	add b32 $r11 $r12	// base = NV_PGRAPH_GPCn
+	ld b32 $r12 D[$r0 + gpc_mmio_list_head]
+	ld b32 $r13 D[$r0 + gpc_mmio_list_tail]
+	mov $r14 0		// not multi
+	call mmctx_xfer
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 
 	// per-TPC mmio context
 	xbit $r10 $flags $p1	// direction
 	or $r10 4		// last
 	mov $r11 0x4000
 	sethi $r11 0x500000	// base = NV_PGRAPH_GPC0_TPC0
+<<<<<<< HEAD
 	ld b32 $r12 D[$r0 + #gpc_id]
 	shl b32 $r12 15
 	add b32 $r11 $r12	// base = NV_PGRAPH_GPCn_TPC0
@@ -518,22 +676,48 @@ ctx_xfer:
 
 	// wait for strands to finish
 	call #strand_wait
+=======
+	ld b32 $r12 D[$r0 + gpc_id]
+	shl b32 $r12 15
+	add b32 $r11 $r12	// base = NV_PGRAPH_GPCn_TPC0
+	ld b32 $r12 D[$r0 + tpc_mmio_list_head]
+	ld b32 $r13 D[$r0 + tpc_mmio_list_tail]
+	ld b32 $r15 D[$r0 + tpc_mask]
+	mov $r14 0x800		// stride = 0x800
+	call mmctx_xfer
+
+	// wait for strands to finish
+	call strand_wait
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 
 	// if load, or a save without a load following, do some
 	// unknown stuff that's done after finishing a block of
 	// strand commands
+<<<<<<< HEAD
 	bra $p1 #ctx_xfer_post
 	bra not $p2 #ctx_xfer_done
+=======
+	bra $p1 ctx_xfer_post
+	bra not $p2 ctx_xfer_done
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	ctx_xfer_post:
 		mov $r1 0x4afc
 		sethi $r1 0x20000
 		mov $r2 0xd
 		iowr I[$r1] $r2		// STRAND_CMD(0x3f) = 0x0d
+<<<<<<< HEAD
 		call #strand_wait
 
 	// mark completion in HUB's barrier
 	ctx_xfer_done:
 	call #hub_barrier_done
+=======
+		call strand_wait
+
+	// mark completion in HUB's barrier
+	ctx_xfer_done:
+	call hub_barrier_done
+>>>>>>> c706d7b986fde372d604d8cd81680ed2a96aa6a1
 	ret
 
 .align 256
