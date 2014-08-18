@@ -128,7 +128,6 @@ obj-y				+= platform/
 obj-y				+= ieee802154/
 #common clk code
 obj-y				+= clk/
-obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
 obj-$(CONFIG_ANDROID_TIMED_OUTPUT)		+= motor/
 
 obj-$(CONFIG_SENSORS_CORE)	+= sensor/
@@ -152,3 +151,6 @@ obj-$(CONFIG_FELICA) += felica/
 obj-$(CONFIG_AUTHENTEC_VPNCLIENT_INTERCEPTOR) += interceptor/
 
 obj-$(CONFIG_ICE4_FPGA)		+= ice4_fpga/
+
+obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
+obj-$(CONFIG_NFC)		+= nfc/
