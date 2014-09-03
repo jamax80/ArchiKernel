@@ -17,12 +17,6 @@ config PN65N_NFC
 menu "Near Field Communication (NFC) devices"
 	depends on NFC
 
-config SF2_NFC_TAG
-	bool "NFC TAG driver"
-	default n
-	help
-	NFC TAG Interrput detecting driver
-
 config PN547_NFC
     tristate "PN547 NFC driver"
 	depends on I2C
