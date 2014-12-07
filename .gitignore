@@ -46,6 +46,12 @@ modules.builtin
 /Module.symvers
 
 #
+# Generated prebuilt binaries for ArchiKernel flasher
+#
+archikernel/flasher/*.zip
+archikernel/flasher/prebuilt
+
+#
 # Debian directory (make deb-pkg)
 #
 /debian/
