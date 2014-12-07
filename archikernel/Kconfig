@@ -226,6 +226,11 @@ comment "Hacks / Workarounds"
 
 comment "Core features"
 
+config ARCHIKERNEL_CPU_OC
+	bool "Enable overclocking of the CPU up to 1.6 GHz"
+	help
+		This option enables additional CPU clock frequencies up to 1600 Mhz.
+
 
 comment "Optimizations"
 
