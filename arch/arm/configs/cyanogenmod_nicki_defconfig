@@ -82,6 +82,7 @@ CONFIG_ARCHIKERNEL_OPTI_O3=y
 #
 # Core features
 #
+CONFIG_ARCHIKERNEL_CPU_OC=y
 
 #
 # Optimizations
